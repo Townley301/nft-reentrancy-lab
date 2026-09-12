@@ -1,0 +1,17 @@
+{
+  "name": "nft-reentrancy-local-lab",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local-only educational simulations of NFT callback reentrancy patterns",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test nodejs",
+    "demo": "hardhat run scripts/run-all.ts",
+    "node": "hardhat node"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox-viem": "5.0.7",
+    "hardhat": "3.16.0"
+  }
+}
