@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NFT 回调重入 · 本地交易观察器</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0b1020;
+      color: #e8edf8;
+      --panel: #121b2d;
+      --panel-2: #182338;
+      --line: #2a3850;
+      --muted: #a9b8cc;
+      --accent: #7adac7;
+      --bad: #f3a2a2;
+      --good: #a9dfb3;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; }
+    button { font: inherit; cursor: pointer; }
+    button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 22px 60px; }
+    header { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; }
+    h1 { margin: 0 0 7px; font-size: clamp(24px, 4vw, 34px); font-weight: 650; letter-spacing: -.02em; }
+    h2 { margin: 0; font-size: 21px; font-weight: 620; }
+    p { margin: 0; line-height: 1.62; }
+    .subtitle, .footnote, .meta { color: var(--muted); }
+    .subtitle { max-width: 700px; }
+    .local-pill { flex: none; border: 1px solid #315e59; color: var(--accent); border-radius: 999px; padding: 7px 12px; font-size: 13px; }
+    .topbar { margin-top: 26px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 18px; align-items: end; }
+    .group-label { display: block; color: var(--muted); font-size: 13px; margin-bottom: 9px; }
+    .tabs, .versions, .transport { display: flex; flex-wrap: wrap; gap: 7px; }
+    .tabs button, .versions button, .transport button {
+      border: 1px solid var(--line); border-radius: 10px; color: #dce5f4;
+      background: var(--panel); padding: 10px 14px; min-height: 42px;
+    }
+    .tabs button[aria-pressed="true"], .versions button[aria-pressed="true"] {
+      color: #0b1820; background: var(--accent); border-color: var(--accent); font-weight: 650;
+    }
+    .versions button.bad[aria-pressed="true"] { background: var(--bad); border-color: var(--bad); }
+    .versions button.good[aria-pressed="true"] { background: var(--good); border-color: var(--good); }
+    .overview { margin-top: 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+    .overview-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 10px; }
+    .overview .summary { margin-top: 8px; color: var(--muted); }
+    .tx { color: var(--muted); font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+    .result { margin-top: 16px; padding: 12px 14px; background: var(--panel-2); border-left: 4px solid var(--bad); border-radius: 7px; }
+    .result.good { border-left-color: var(--good); }
+    .result strong { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+    .progress-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 27px 0 10px; }
+    .progress-row .meta { font-size: 13px; }
+    .progress { height: 7px; background: var(--line); border-radius: 99px; overflow: hidden; }
+    .progress > div { height: 100%; width: 0; background: var(--accent); transition: width .22s ease; }
+    .actors { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 24px 0 8px; }
+    .actor { position: relative; min-height: 88px; padding: 15px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 13px; text-align: center; transition: border-color .2s, background .2s, transform .2s; }
+    .actor:not(:last-child)::after { content: "→"; position: absolute; right: -14px; top: 30px; z-index: 2; color: var(--muted); font-size: 21px; }
+    .actor.active { background: #17403e; border-color: var(--accent); transform: translateY(-3px); }
+    .actor .icon { display: block; font-size: 23px; margin-bottom: 5px; }
+    .actor .name { font-size: 14px; font-weight: 630; }
+    .reentry-line { text-align: right; min-height: 24px; color: var(--bad); font-size: 13px; margin-bottom: 11px; opacity: 0; transition: opacity .2s; }
+    .reentry-line.visible { opacity: 1; }
+    .main-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(260px, .8fr); gap: 16px; align-items: start; }
+    .focus-stack { display: grid; gap: 16px; min-width: 0; }
+    .current, .timeline, .code-panel { border: 1px solid var(--line); background: var(--panel); border-radius: 16px; }
+    .current { padding: 22px; min-height: 205px; }
+    .eyebrow { color: var(--accent); font-size: 13px; font-weight: 650; letter-spacing: .02em; }
+    .current h2 { margin: 10px 0; }
+    .current .detail { color: #c9d6e7; min-height: 50px; }
+    .metrics { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 21px; }
+    .metric { border: 1px solid var(--line); background: var(--panel-2); border-radius: 9px; padding: 9px 11px; min-width: 90px; }
+    .metric .label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .metric .value { display: block; font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; }
+    .call-path { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 7px; align-items: center; color: var(--muted); font-size: 13px; }
+    .call-path .crumb { background: var(--panel-2); border-radius: 6px; padding: 4px 7px; }
+    .call-path .crumb:last-child { color: var(--accent); }
+    .call-path .arrow { color: #8096ae; }
+    .code-panel { padding: 18px 0 0; overflow: hidden; }
+    .code-header { padding: 0 18px 13px; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .code-header h2 { font-size: 16px; }
+    .code-location { color: var(--muted); font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+    .code-symbol { display: block; padding: 0 18px 12px; color: var(--accent); font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+    .code-window { overflow-x: auto; background: #0d1524; padding: 10px 0; }
+    .code-line { display: flex; width: max-content; min-width: 100%; font: 12px/1.58 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; color: #cbd7e9; }
+    .code-line.focus { background: #254b4c; color: #f0fff9; }
+    .line-number { display: inline-block; flex: none; width: 45px; padding: 0 9px 0 5px; text-align: right; color: #8298b0; user-select: none; }
+    .code-line.focus .line-number { color: var(--accent); font-weight: 700; }
+    .code-line code { padding-right: 16px; font: inherit; }
+    .code-empty { padding: 18px; color: var(--muted); line-height: 1.55; }
+    .timeline { padding: 18px; }
+    .timeline h2 { font-size: 16px; margin-bottom: 13px; }
+    .timeline-list { display: grid; gap: 6px; }
+    .timeline button { width: 100%; text-align: left; padding: 8px 10px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--muted); display: flex; gap: 10px; align-items: start; }
+    .timeline button:hover { background: var(--panel-2); color: #e8edf8; }
+    .timeline button[aria-current="step"] { background: #17403e; border-color: #366d65; color: #fff; }
+    .timeline .number { flex: none; font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); }
+    .timeline .label { font-size: 13px; line-height: 1.35; }
+    .transport { margin-top: 14px; align-items: center; }
+    .transport button { min-width: 86px; }
+    .transport button:disabled { opacity: .45; cursor: default; }
+    .transport .hint { color: var(--muted); font-size: 12px; margin-left: auto; }
+    .footnote { margin-top: 28px; font-size: 13px; }
+    .footnote a { color: var(--accent); }
+    @media (max-width: 760px) {
+      .main-grid { grid-template-columns: 1fr; }
+      .actors { gap: 6px; }
+      .actor { min-height: 84px; padding: 12px 5px; }
+      .actor:not(:last-child)::after { right: -8px; font-size: 16px; }
+      .actor .name { font-size: 12px; }
+    }
+    @media (max-width: 500px) {
+      header { display: block; }
+      .local-pill { display: inline-block; margin-top: 12px; }
+      .wrap { padding: 20px 14px 40px; }
+      .tabs, .versions { width: 100%; }
+      .tabs button { flex: 1; padding: 9px 7px; font-size: 13px; }
+      .versions button { flex: 1; }
+      .actor .icon { font-size: 18px; }
+      .transport .hint { width: 100%; margin-left: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>NFT 回调重入 · 本地交易观察器</h1>
+        <p class="subtitle">点选案例和步骤，左侧显示对应源码与调用路径，看 NFT 回调怎样进入另一段代码、改变状态，再返回原函数。</p>
+      </div>
+      <span class="local-pill">● 仅本地虚拟资产</span>
+    </header>
+
+    <div class="topbar">
+      <div>
+        <span class="group-label">选择案例</span>
+        <div class="tabs" id="case-tabs" role="group" aria-label="选择案例">
+          <button type="button" data-case="hypebears">1 · HypeBears</button>
+          <button type="button" data-case="omni">2 · OMNI</button>
+          <button type="button" data-case="revest">3 · Revest</button>
+        </div>
+      </div>
+      <div>
+        <span class="group-label">对比版本</span>
+        <div class="versions" id="version-tabs" role="group" aria-label="对比版本">
+          <button type="button" data-version="vulnerable" class="bad">漏洞版</button>
+          <button type="button" data-version="fixed" class="good">修复版</button>
+        </div>
+      </div>
+    </div>
+
+    <section class="overview" aria-labelledby="scenario-heading">
+      <div class="overview-head">
+        <h2 id="scenario-heading"></h2>
+        <span class="tx" id="tx-hash"></span>
+      </div>
+      <p class="summary" id="intro"></p>
+      <div class="result" id="result-box"><strong>最终结果</strong><span id="outcome"></span></div>
+    </section>
+
+    <div class="progress-row">
+      <strong id="step-count">步骤 1 / 1</strong>
+      <span class="meta" id="step-source"></span>
+    </div>
+    <div class="progress" role="progressbar" aria-label="流程进度" aria-valuemin="1" id="progress"><div id="progress-fill"></div></div>
+
+    <div class="transport" role="group" aria-label="步骤控制">
+      <button type="button" id="previous">← 上一步</button>
+      <button type="button" id="play">▶ 自动播放</button>
+      <button type="button" id="next">下一步 →</button>
+      <span class="hint">也可点击右侧任一事件跳转</span>
+    </div>
+
+    <div class="actors" aria-label="调用过程中的角色">
+      <div class="actor" data-actor="student"><span class="icon" aria-hidden="true">👤</span><span class="name">发起者</span></div>
+      <div class="actor" data-actor="protocol"><span class="icon" aria-hidden="true">▣</span><span class="name">协议合约</span></div>
+      <div class="actor" data-actor="nft"><span class="icon" aria-hidden="true">◇</span><span class="name">NFT 合约</span></div>
+      <div class="actor" data-actor="receiver"><span class="icon" aria-hidden="true">↪</span><span class="name">接收回调</span></div>
+    </div>
+    <div class="reentry-line" id="reentry-line" aria-hidden="true">↶ 回调期间再次进入协议合约</div>
+
+    <div class="main-grid">
+      <div class="focus-stack">
+        <section class="current" aria-live="polite" aria-atomic="true">
+          <span class="eyebrow" id="current-category"></span>
+          <h2 id="current-title"></h2>
+          <p class="detail" id="current-detail"></p>
+          <div class="metrics" id="metrics"></div>
+          <div class="call-path" id="call-path" aria-label="教学标注的当前调用路径"></div>
+        </section>
+        <section class="code-panel" aria-labelledby="code-heading">
+          <div class="code-header">
+            <h2 id="code-heading">这一步对应的代码</h2>
+            <span class="code-location" id="code-location"></span>
+          </div>
+          <span class="code-symbol" id="code-symbol"></span>
+          <div class="code-window" id="code-window" aria-label="带行号的 Solidity 代码片段"></div>
+        </section>
+      </div>
+      <section class="timeline" aria-labelledby="timeline-heading">
+        <h2 id="timeline-heading">交易中的事件顺序</h2>
+        <div class="timeline-list" id="timeline-list"></div>
+      </section>
+    </div>
+
+    <p class="footnote">事件顺序来自本地交易收据；源码片段从当前项目文件生成，绿色高亮行对应发出事件的位置或关键判断。调用路径根据教学合约结构标注，并非逐条 EVM 指令追踪。回滚交易没有事件日志，只显示脚本观察。案例来源见 <a href="README.md">README</a>。</p>
+  </div>
+
+  <script>
+    const payload = {"generatedAt":"2026-09-13T15:36:52.853Z","scenarios":[{"caseId":"hypebears","variant":"vulnerable","txHash":"0x23c7994d7bbddaa6ff030bb7f852e93d09f9faa3e5739d267e60e4df69b2629a","intro":"一地址只允许铸造一次；演示接收方是可执行代码的合约。","outcome":"一次外层交易得到 2 枚 Toy NFT；一次性资格被重复使用。","steps":[{"title":"提交一次铸造交易","detail":"本地临时账户调用教学接收合约，再由它进入铸造合约。","actor":"student","source":"脚本观察","metrics":{"初始 NFT":"0"},"code":{"path":"contracts/hypebears/HypeBearsLab.sol","symbol":"HypeBearsCallbackStudent.runLesson","focusLine":73,"lines":[{"number":70,"text":""},{"number":71,"text":"    function runLesson() external {"},{"number":72,"text":"        armed = true;"},{"number":73,"text":"        target.mintNFT();"},{"number":74,"text":"        armed = false;"},{"number":75,"text":"    }"},{"number":76,"text":""}]},"callPath":["runLesson"]},{"title":"铸造资格检查通过","detail":"协议查看一次性资格标记；此时它还显示‘未使用’。","actor":"protocol","source":"链上事件","metrics":{"事件值":"0"},"code":{"path":"contracts/hypebears/HypeBearsLab.sol","symbol":"HypeBearsVulnerable.mintNFT","focusLine":38,"lines":[{"number":34,"text":"/// @notice Vulnerable ordering: the one-time mint flag is written after the callback."},{"number":35,"text":"contract HypeBearsVulnerable is HypeBearsToyBase {"},{"number":36,"text":"    function mintNFT() external override {"},{"number":37,"text":"        require(!addressMinted[msg.sender], \"already minted\");"},{"number":38,"text":"        emit Step(\"eligibility check passed\", msg.sender, balanceOf[msg.sender]);"},{"number":39,"text":"        _safeMint(msg.sender);"},{"number":40,"text":"        addressMinted[msg.sender] = true;"},{"number":41,"text":"        emit Step(\"mint flag written too late\", msg.sender, balanceOf[msg.sender]);"},{"number":42,"text":"    }"},{"number":43,"text":"}"},{"number":44,"text":""},{"number":45,"text":"/// @notice Fixed ordering: consume the eligibility before handing control to the receiver."},{"number":46,"text":"contract HypeBearsFixed is HypeBearsToyBase {"}]},"callPath":["runLesson","mintNFT"]},{"title":"Toy NFT 已写入，马上触发回调","detail":"铸造已发生，但外层 mintNFT 尚未结束；控制权即将交给接收合约。","actor":"nft","source":"链上事件","metrics":{"事件值":"1"},"code":{"path":"contracts/hypebears/HypeBearsLab.sol","symbol":"HypeBearsToyBase._safeMint","focusLine":20,"lines":[{"number":16,"text":"    function _safeMint(address to) internal {"},{"number":17,"text":"        uint256 tokenId = nextTokenId++;"},{"number":18,"text":"        ownerOf[tokenId] = to;"},{"number":19,"text":"        balanceOf[to] += 1;"},{"number":20,"text":"        emit Step(\"NFT state written; receiver callback is next\", to, tokenId);"},{"number":21,"text":""},{"number":22,"text":"        if (to.code.length != 0) {"},{"number":23,"text":"            bytes4 answer = IERC721Receiver(to).onERC721Received("},{"number":24,"text":"                msg.sender,"},{"number":25,"text":"                address(0),"},{"number":26,"text":"                tokenId,"},{"number":27,"text":"                \"\""},{"number":28,"text":"            );"},{"number":29,"text":"            require(answer == IERC721Receiver.onERC721Received.selector, \"receiver rejected NFT\");"},{"number":30,"text":"        }"}]},"callPath":["runLesson","mintNFT","_safeMint"]},{"title":"接收回调：再次调用 mintNFT","detail":"接收合约收到 NFT 后，趁一次性资格还没更新，再次进入同一个铸造函数。","actor":"receiver","source":"链上事件","metrics":{"回调次数":"1","尝试重入":"是"},"code":{"path":"contracts/hypebears/HypeBearsLab.sol","symbol":"HypeBearsCallbackStudent.onERC721Received","focusLine":85,"lines":[{"number":80,"text":"        uint256,"},{"number":81,"text":"        bytes calldata"},{"number":82,"text":"    ) external returns (bytes4) {"},{"number":83,"text":"        callbacks += 1;"},{"number":84,"text":"        bool shouldTry = armed && callbacks == 1;"},{"number":85,"text":"        emit CallbackObserved(callbacks, shouldTry);"},{"number":86,"text":""},{"number":87,"text":"        if (shouldTry) {"},{"number":88,"text":"            try target.mintNFT() {"},{"number":89,"text":"                reentrySucceeded = true;"},{"number":90,"text":"            } catch {"},{"number":91,"text":"                reentrySucceeded = false;"},{"number":92,"text":"            }"},{"number":93,"text":"        }"},{"number":94,"text":""},{"number":95,"text":"        return IERC721Receiver.onERC721Received.selector;"}]},"callPath":["runLesson","mintNFT","_safeMint","onERC721Received"]},{"title":"铸造资格检查通过","detail":"协议查看一次性资格标记；此时它还显示‘未使用’。","actor":"protocol","source":"链上事件","metrics":{"事件值":"1"},"code":{"path":"contracts/hypebears/HypeBearsLab.sol","symbol":"HypeBearsVulnerable.mintNFT","focusLine":38,"lines":[{"number":34,"text":"/// @notice Vulnerable ordering: the one-time mint flag is written after the callback."},{"number":35,"text":"contract HypeBearsVulnerable is HypeBearsToyBase {"},{"number":36,"text":"    function mintNFT() external override {"},{"number":37,"text":"        require(!addressMinted[msg.sender], \"already minted\");"},{"number":38,"text":"        emit Step(\"eligibility check passed\", msg.sender, balanceOf[msg.sender]);"},{"number":39,"text":"        _safeMint(msg.sender);"},{"number":40,"text":"        addressMinted[msg.sender] = true;"},{"number":41,"text":"        emit Step(\"mint flag written too late\", msg.sender, balanceOf[msg.sender]);"},{"number":42,"text":"    }"},{"number":43,"text":"}"},{"number":44,"text":""},{"number":45,"text":"/// @notice Fixed ordering: consume the eligibility before handing control to the receiver."},{"number":46,"text":"contract HypeBearsFixed is HypeBearsToyBase {"}]},"callPath":["runLesson","mintNFT","_safeMint","onERC721Received","mintNFT（重入）"]},{"title":"Toy NFT 已写入，马上触发回调","detail":"铸造已发生，但外层 mintNFT 尚未结束；控制权即将交给接收合约。","actor":"nft","source":"链上事件","metrics":{"事件值":"2"},"code":{"path":"contracts/hypebears/HypeBearsLab.sol","symbol":"HypeBearsToyBase._safeMint","focusLine":20,"lines":[{"number":16,"text":"    function _safeMint(address to) internal {"},{"number":17,"text":"        uint256 tokenId = nextTokenId++;"},{"number":18,"text":"        ownerOf[tokenId] = to;"},{"number":19,"text":"        balanceOf[to] += 1;"},{"number":20,"text":"        emit Step(\"NFT state written; receiver callback is next\", to, tokenId);"},{"number":21,"text":""},{"number":22,"text":"        if (to.code.length != 0) {"},{"number":23,"text":"            bytes4 answer = IERC721Receiver(to).onERC721Received("},{"number":24,"text":"                msg.sender,"},{"number":25,"text":"                address(0),"},{"number":26,"text":"                tokenId,"},{"number":27,"text":"                \"\""},{"number":28,"text":"            );"},{"number":29,"text":"            require(answer == IERC721Receiver.onERC721Received.selector, \"receiver rejected NFT\");"},{"number":30,"text":"        }"}]},"callPath":["runLesson","mintNFT","_safeMint","onERC721Received","mintNFT（重入）","_safeMint"]},{"title":"第二层 NFT 接收回调","detail":"这是嵌套铸造得到的 NFT；演示合约在这一层停止继续重入。","actor":"receiver","source":"链上事件","metrics":{"回调次数":"2","尝试重入":"否"},"code":{"path":"contracts/hypebears/HypeBearsLab.sol","symbol":"HypeBearsCallbackStudent.onERC721Received","focusLine":85,"lines":[{"number":80,"text":"        uint256,"},{"number":81,"text":"        bytes calldata"},{"number":82,"text":"    ) external returns (bytes4) {"},{"number":83,"text":"        callbacks += 1;"},{"number":84,"text":"        bool shouldTry = armed && callbacks == 1;"},{"number":85,"text":"        emit CallbackObserved(callbacks, shouldTry);"},{"number":86,"text":""},{"number":87,"text":"        if (shouldTry) {"},{"number":88,"text":"            try target.mintNFT() {"},{"number":89,"text":"                reentrySucceeded = true;"},{"number":90,"text":"            } catch {"},{"number":91,"text":"                reentrySucceeded = false;"},{"number":92,"text":"            }"},{"number":93,"text":"        }"},{"number":94,"text":""},{"number":95,"text":"        return IERC721Receiver.onERC721Received.selector;"}]},"callPath":["runLesson","mintNFT","_safeMint","onERC721Received","mintNFT（重入）","_safeMint","onERC721Received（第二层）"]},{"title":"资格标记现在才更新","detail":"回调和嵌套铸造都已经完成，此时再写入资格标记已经太晚。","actor":"protocol","source":"链上事件","metrics":{"事件值":"2"},"code":{"path":"contracts/hypebears/HypeBearsLab.sol","symbol":"HypeBearsVulnerable.mintNFT","focusLine":41,"lines":[{"number":37,"text":"        require(!addressMinted[msg.sender], \"already minted\");"},{"number":38,"text":"        emit Step(\"eligibility check passed\", msg.sender, balanceOf[msg.sender]);"},{"number":39,"text":"        _safeMint(msg.sender);"},{"number":40,"text":"        addressMinted[msg.sender] = true;"},{"number":41,"text":"        emit Step(\"mint flag written too late\", msg.sender, balanceOf[msg.sender]);"},{"number":42,"text":"    }"},{"number":43,"text":"}"},{"number":44,"text":""},{"number":45,"text":"/// @notice Fixed ordering: consume the eligibility before handing control to the receiver."},{"number":46,"text":"contract HypeBearsFixed is HypeBearsToyBase {"},{"number":47,"text":"    function mintNFT() external override {"},{"number":48,"text":"        require(!addressMinted[msg.sender], \"already minted\");"},{"number":49,"text":"        addressMinted[msg.sender] = true;"}]},"callPath":["runLesson","mintNFT","_safeMint","onERC721Received","mintNFT（重入）"]},{"title":"资格标记现在才更新","detail":"回调和嵌套铸造都已经完成，此时再写入资格标记已经太晚。","actor":"protocol","source":"链上事件","metrics":{"事件值":"2"},"code":{"path":"contracts/hypebears/HypeBearsLab.sol","symbol":"HypeBearsVulnerable.mintNFT","focusLine":41,"lines":[{"number":37,"text":"        require(!addressMinted[msg.sender], \"already minted\");"},{"number":38,"text":"        emit Step(\"eligibility check passed\", msg.sender, balanceOf[msg.sender]);"},{"number":39,"text":"        _safeMint(msg.sender);"},{"number":40,"text":"        addressMinted[msg.sender] = true;"},{"number":41,"text":"        emit Step(\"mint flag written too late\", msg.sender, balanceOf[msg.sender]);"},{"number":42,"text":"    }"},{"number":43,"text":"}"},{"number":44,"text":""},{"number":45,"text":"/// @notice Fixed ordering: consume the eligibility before handing control to the receiver."},{"number":46,"text":"contract HypeBearsFixed is HypeBearsToyBase {"},{"number":47,"text":"    function mintNFT() external override {"},{"number":48,"text":"        require(!addressMinted[msg.sender], \"already minted\");"},{"number":49,"text":"        addressMinted[msg.sender] = true;"}]},"callPath":["runLesson","mintNFT"]},{"title":"读取交易后的状态","detail":"第二次铸造发生在资格写入之前。","actor":"student","source":"脚本观察","metrics":{"最终 Toy NFT":"2","重入成功":"是"},"callPath":["读取最终状态"]}]},{"caseId":"hypebears","variant":"fixed","txHash":"0x8e4d38d7898c6ee1b1b9bfcf60a8860e67f9550da573f7f107574b60291bec53","intro":"一地址只允许铸造一次；演示接收方是可执行代码的合约。","outcome":"一次外层交易只得到 1 枚 Toy NFT；回调中的第二次铸造被拒绝。","steps":[{"title":"提交一次铸造交易","detail":"本地临时账户调用教学接收合约，再由它进入铸造合约。","actor":"student","source":"脚本观察","metrics":{"初始 NFT":"0"},"code":{"path":"contracts/hypebears/HypeBearsLab.sol","symbol":"HypeBearsCallbackStudent.runLesson","focusLine":73,"lines":[{"number":70,"text":""},{"number":71,"text":"    function runLesson() external {"},{"number":72,"text":"        armed = true;"},{"number":73,"text":"        target.mintNFT();"},{"number":74,"text":"        armed = false;"},{"number":75,"text":"    }"},{"number":76,"text":""}]},"callPath":["runLesson"]},{"title":"先消耗铸造资格","detail":"修复版在交出执行权以前就把一次性资格标记为已使用。","actor":"protocol","source":"链上事件","metrics":{"事件值":"0"},"code":{"path":"contracts/hypebears/HypeBearsLab.sol","symbol":"HypeBearsFixed.mintNFT","focusLine":50,"lines":[{"number":46,"text":"contract HypeBearsFixed is HypeBearsToyBase {"},{"number":47,"text":"    function mintNFT() external override {"},{"number":48,"text":"        require(!addressMinted[msg.sender], \"already minted\");"},{"number":49,"text":"        addressMinted[msg.sender] = true;"},{"number":50,"text":"        emit Step(\"mint flag written before callback\", msg.sender, balanceOf[msg.sender]);"},{"number":51,"text":"        _safeMint(msg.sender);"},{"number":52,"text":"    }"},{"number":53,"text":"}"},{"number":54,"text":""},{"number":55,"text":"interface IHypeBearsToy {"},{"number":56,"text":"    function mintNFT() external;"},{"number":57,"text":"}"},{"number":58,"text":""}]},"callPath":["runLesson","mintNFT"]},{"title":"Toy NFT 已写入，马上触发回调","detail":"铸造已发生，但外层 mintNFT 尚未结束；控制权即将交给接收合约。","actor":"nft","source":"链上事件","metrics":{"事件值":"1"},"code":{"path":"contracts/hypebears/HypeBearsLab.sol","symbol":"HypeBearsToyBase._safeMint","focusLine":20,"lines":[{"number":16,"text":"    function _safeMint(address to) internal {"},{"number":17,"text":"        uint256 tokenId = nextTokenId++;"},{"number":18,"text":"        ownerOf[tokenId] = to;"},{"number":19,"text":"        balanceOf[to] += 1;"},{"number":20,"text":"        emit Step(\"NFT state written; receiver callback is next\", to, tokenId);"},{"number":21,"text":""},{"number":22,"text":"        if (to.code.length != 0) {"},{"number":23,"text":"            bytes4 answer = IERC721Receiver(to).onERC721Received("},{"number":24,"text":"                msg.sender,"},{"number":25,"text":"                address(0),"},{"number":26,"text":"                tokenId,"},{"number":27,"text":"                \"\""},{"number":28,"text":"            );"},{"number":29,"text":"            require(answer == IERC721Receiver.onERC721Received.selector, \"receiver rejected NFT\");"},{"number":30,"text":"        }"}]},"callPath":["runLesson","mintNFT","_safeMint"]},{"title":"接收回调：再次调用 mintNFT","detail":"接收合约尝试再次调用同一个函数，但资格已在回调前消耗，重入会被拒绝。","actor":"receiver","source":"链上事件","metrics":{"回调次数":"1","尝试重入":"是"},"code":{"path":"contracts/hypebears/HypeBearsLab.sol","symbol":"HypeBearsCallbackStudent.onERC721Received","focusLine":85,"lines":[{"number":80,"text":"        uint256,"},{"number":81,"text":"        bytes calldata"},{"number":82,"text":"    ) external returns (bytes4) {"},{"number":83,"text":"        callbacks += 1;"},{"number":84,"text":"        bool shouldTry = armed && callbacks == 1;"},{"number":85,"text":"        emit CallbackObserved(callbacks, shouldTry);"},{"number":86,"text":""},{"number":87,"text":"        if (shouldTry) {"},{"number":88,"text":"            try target.mintNFT() {"},{"number":89,"text":"                reentrySucceeded = true;"},{"number":90,"text":"            } catch {"},{"number":91,"text":"                reentrySucceeded = false;"},{"number":92,"text":"            }"},{"number":93,"text":"        }"},{"number":94,"text":""},{"number":95,"text":"        return IERC721Receiver.onERC721Received.selector;"}]},"callPath":["runLesson","mintNFT","_safeMint","onERC721Received"]},{"title":"读取交易后的状态","detail":"回调虽然发生，但无法再次使用已经消耗的资格。","actor":"student","source":"脚本观察","metrics":{"最终 Toy NFT":"1","重入成功":"否"},"callPath":["读取最终状态"]}]},{"caseId":"omni","variant":"vulnerable","txHash":"0xe96ff48f4566ff61ee7ea062982a4c7f0b5b12f5a8b1223479f7a6fb72060523","intro":"取回抵押 NFT 前必须保证剩余抵押足以覆盖 Toy 债务。","outcome":"两枚 Toy NFT 都离开池子，借款人仍欠 14 个 Toy Token；抵押约束被破坏。","steps":[{"title":"建立借贷初始状态","detail":"借款人存入 2 枚 Toy NFT，借出 15 个 Toy Token；接收方准备在收到 NFT 时进入清算函数。","actor":"student","source":"脚本观察","metrics":{"有效抵押数":"2","未还 Toy 债务":"15"},"code":{"path":"contracts/omni/OmniLab.sol","symbol":"OmniBorrowerStudent.prepare","focusLine":164,"lines":[{"number":161,"text":""},{"number":162,"text":"    function prepare(uint256 firstId, uint256 secondId, uint256 borrowAmount) external {"},{"number":163,"text":"        nft.setApprovalForAll(address(pool), true);"},{"number":164,"text":"        pool.supply(firstId);"},{"number":165,"text":"        pool.supply(secondId);"},{"number":166,"text":"        pool.borrow(borrowAmount);"},{"number":167,"text":"    }"}]},"callPath":["prepare：存入抵押并借款"]},{"title":"第一枚抵押 NFT 正在转出","detail":"抵押数量已经降为 1，但外层提现流程和健康度检查尚未完成。","actor":"protocol","source":"链上事件","metrics":{"有效抵押数":"1","未还 Toy 债务":"15"},"code":{"path":"contracts/omni/OmniLab.sol","symbol":"OmniPoolVulnerable.withdraw","focusLine":68,"lines":[{"number":64,"text":"        // The receipt balance is reduced, but the broader collateral flag and"},{"number":65,"text":"        // final health decision are intentionally left unfinished."},{"number":66,"text":"        depositorOf[tokenId] = address(0);"},{"number":67,"text":"        collateralCount[msg.sender] -= 1;"},{"number":68,"text":"        emit Step(\"withdraw half-finished; callback is next\", msg.sender, collateralCount[msg.sender], debt[msg.sender]);"},{"number":69,"text":""},{"number":70,"text":"        nft.safeTransferFrom(address(this), to, tokenId);"},{"number":71,"text":""},{"number":72,"text":"        // A reentrant liquidation can turn this flag off, causing the check to be skipped."},{"number":73,"text":"        if (usingAsCollateral[msg.sender]) {"},{"number":74,"text":"            require(_isHealthy(msg.sender), \"withdraw leaves unhealthy debt\");"},{"number":75,"text":"        }"},{"number":76,"text":"        if (collateralCount[msg.sender] == 0) {"}]},"callPath":["startWithdraw","withdraw"]},{"title":"接收回调：转入另一清算函数","detail":"攻击者合约收到第一枚 NFT，立即调用 liquidate，而不是再次调用 withdraw。","actor":"receiver","source":"链上事件","metrics":{"Toy NFT ID":"1","尝试跨函数进入":"是"},"code":{"path":"contracts/omni/OmniLab.sol","symbol":"OmniLiquidatorCallbackStudent.onERC721Received","focusLine":206,"lines":[{"number":201,"text":"        uint256 tokenId,"},{"number":202,"text":"        bytes calldata"},{"number":203,"text":"    ) external returns (bytes4) {"},{"number":204,"text":"        callbacks += 1;"},{"number":205,"text":"        bool shouldTry = armed;"},{"number":206,"text":"        emit CallbackObserved(tokenId, shouldTry);"},{"number":207,"text":""},{"number":208,"text":"        if (shouldTry) {"},{"number":209,"text":"            armed = false;"},{"number":210,"text":"            try pool.liquidate(borrower, secondTokenId, address(this)) {"},{"number":211,"text":"                reentrySucceeded = true;"},{"number":212,"text":"            } catch {"},{"number":213,"text":"                reentrySucceeded = false;"},{"number":214,"text":"            }"},{"number":215,"text":"        }"},{"number":216,"text":""}]},"callPath":["startWithdraw","withdraw","ToyERC721.safeTransferFrom","onERC721Received"]},{"title":"回调中进入了清算函数","detail":"这是另一条业务路径。它继续改变同一借款人的抵押数量和债务。","actor":"protocol","source":"链上事件","metrics":{"有效抵押数":"0","未还 Toy 债务":"14"},"code":{"path":"contracts/omni/OmniLab.sol","symbol":"OmniPoolVulnerable.liquidate","focusLine":93,"lines":[{"number":89,"text":""},{"number":90,"text":"        debt[user] -= LIQUIDATION_REPAYMENT;"},{"number":91,"text":"        depositorOf[tokenId] = address(0);"},{"number":92,"text":"        collateralCount[user] -= 1;"},{"number":93,"text":"        emit Step(\"liquidation half-finished; callback is next\", user, collateralCount[user], debt[user]);"},{"number":94,"text":""},{"number":95,"text":"        nft.safeTransferFrom(address(this), to, tokenId);"},{"number":96,"text":""},{"number":97,"text":"        if (collateralCount[user] == 0) {"},{"number":98,"text":"            usingAsCollateral[user] = false;"},{"number":99,"text":"        }"},{"number":100,"text":"        emit Step(\"liquidation finished\", user, collateralCount[user], debt[user]);"},{"number":101,"text":"    }"}]},"callPath":["startWithdraw","withdraw","ToyERC721.safeTransferFrom","onERC721Received","liquidate（跨函数）"]},{"title":"清算所得 NFT 的接收回调","detail":"第二层回调只确认收到 NFT，不再继续进入协议。","actor":"receiver","source":"链上事件","metrics":{"Toy NFT ID":"2","尝试跨函数进入":"否"},"code":{"path":"contracts/omni/OmniLab.sol","symbol":"OmniLiquidatorCallbackStudent.onERC721Received","focusLine":206,"lines":[{"number":201,"text":"        uint256 tokenId,"},{"number":202,"text":"        bytes calldata"},{"number":203,"text":"    ) external returns (bytes4) {"},{"number":204,"text":"        callbacks += 1;"},{"number":205,"text":"        bool shouldTry = armed;"},{"number":206,"text":"        emit CallbackObserved(tokenId, shouldTry);"},{"number":207,"text":""},{"number":208,"text":"        if (shouldTry) {"},{"number":209,"text":"            armed = false;"},{"number":210,"text":"            try pool.liquidate(borrower, secondTokenId, address(this)) {"},{"number":211,"text":"                reentrySucceeded = true;"},{"number":212,"text":"            } catch {"},{"number":213,"text":"                reentrySucceeded = false;"},{"number":214,"text":"            }"},{"number":215,"text":"        }"},{"number":216,"text":""}]},"callPath":["startWithdraw","withdraw","ToyERC721.safeTransferFrom","onERC721Received","liquidate（跨函数）","ToyERC721.safeTransferFrom","onERC721Received（第二层）"]},{"title":"清算路径先结束","detail":"嵌套调用返回外层提现之前，抵押标记和共享状态已被改变。","actor":"protocol","source":"链上事件","metrics":{"有效抵押数":"0","未还 Toy 债务":"14"},"code":{"path":"contracts/omni/OmniLab.sol","symbol":"OmniPoolVulnerable.liquidate","focusLine":100,"lines":[{"number":96,"text":""},{"number":97,"text":"        if (collateralCount[user] == 0) {"},{"number":98,"text":"            usingAsCollateral[user] = false;"},{"number":99,"text":"        }"},{"number":100,"text":"        emit Step(\"liquidation finished\", user, collateralCount[user], debt[user]);"},{"number":101,"text":"    }"},{"number":102,"text":"}"},{"number":103,"text":""},{"number":104,"text":"/// @notice Fixed model: shared lock plus checks/effects before NFT delivery."},{"number":105,"text":"contract OmniPoolFixed is OmniToyPoolBase {"},{"number":106,"text":"    bool private entered;"},{"number":107,"text":""},{"number":108,"text":"    modifier nonReentrant() {"}]},"callPath":["startWithdraw","withdraw","ToyERC721.safeTransferFrom","onERC721Received","liquidate（跨函数）"]},{"title":"外层提现继续执行","detail":"它看到的共享状态已不同于进入 NFT 回调之前，最终没有挡住剩余债务。","actor":"protocol","source":"链上事件","metrics":{"有效抵押数":"0","未还 Toy 债务":"14"},"code":{"path":"contracts/omni/OmniLab.sol","symbol":"OmniPoolVulnerable.withdraw","focusLine":79,"lines":[{"number":75,"text":"        }"},{"number":76,"text":"        if (collateralCount[msg.sender] == 0) {"},{"number":77,"text":"            usingAsCollateral[msg.sender] = false;"},{"number":78,"text":"        }"},{"number":79,"text":"        emit Step(\"withdraw finished\", msg.sender, collateralCount[msg.sender], debt[msg.sender]);"},{"number":80,"text":"    }"},{"number":81,"text":""},{"number":82,"text":"    function liquidate(address user, uint256 tokenId, address to) external {"},{"number":83,"text":"        require(depositorOf[tokenId] == user, \"not user's collateral\");"},{"number":84,"text":"        require(!_isHealthy(user), \"position is healthy\");"},{"number":85,"text":"        require("},{"number":86,"text":"            loanToken.transferFrom(msg.sender, address(this), LIQUIDATION_REPAYMENT),"},{"number":87,"text":"            \"repayment failed\""}]},"callPath":["startWithdraw","withdraw"]},{"title":"读取交易后的状态","detail":"外层取回与回调中的清算都结束了；两条路径共享的状态已不再满足借贷规则。","actor":"student","source":"脚本观察","metrics":{"有效抵押数":"0","未还 Toy 债务":"14","跨函数重入成功":"是"},"callPath":["读取最终状态"]}]},{"caseId":"omni","variant":"fixed","intro":"取回抵押 NFT 前必须保证剩余抵押足以覆盖 Toy 债务。","outcome":"不健康的取回请求回滚；2 枚抵押 NFT 留在池中，接收回调没有发生。","steps":[{"title":"建立借贷初始状态","detail":"借款人存入 2 枚 Toy NFT，借出 15 个 Toy Token；接收方准备在收到 NFT 时进入清算函数。","actor":"student","source":"脚本观察","metrics":{"有效抵押数":"2","未还 Toy 债务":"15"},"code":{"path":"contracts/omni/OmniLab.sol","symbol":"OmniBorrowerStudent.prepare","focusLine":164,"lines":[{"number":161,"text":""},{"number":162,"text":"    function prepare(uint256 firstId, uint256 secondId, uint256 borrowAmount) external {"},{"number":163,"text":"        nft.setApprovalForAll(address(pool), true);"},{"number":164,"text":"        pool.supply(firstId);"},{"number":165,"text":"        pool.supply(secondId);"},{"number":166,"text":"        pool.borrow(borrowAmount);"},{"number":167,"text":"    }"}]},"callPath":["prepare：存入抵押并借款"]},{"title":"申请取回第一枚 NFT","detail":"修复版先减少抵押并检查取回后的健康度；检查发生在 NFT 转账之前。","actor":"student","source":"脚本观察","code":{"path":"contracts/omni/OmniLab.sol","symbol":"OmniPoolFixed.withdraw","focusLine":127,"lines":[{"number":122,"text":"        depositorOf[tokenId] = address(0);"},{"number":123,"text":"        collateralCount[msg.sender] -= 1;"},{"number":124,"text":"        if (collateralCount[msg.sender] == 0) {"},{"number":125,"text":"            usingAsCollateral[msg.sender] = false;"},{"number":126,"text":"        }"},{"number":127,"text":"        require(_isHealthy(msg.sender), \"withdraw leaves unhealthy debt\");"},{"number":128,"text":""},{"number":129,"text":"        emit Step(\"state finalized before callback\", msg.sender, collateralCount[msg.sender], debt[msg.sender]);"},{"number":130,"text":"        nft.safeTransferFrom(address(this), to, tokenId);"}]},"callPath":["startWithdraw","withdraw"]},{"title":"交易回滚，未触发回调","detail":"取回后只有 1 枚抵押品，不足以覆盖 15 个单位的虚拟债务，因而整笔交易撤销。","actor":"student","source":"脚本观察","metrics":{"有效抵押数":"2","未还 Toy 债务":"15","接收回调次数":"0"},"callPath":["startWithdraw","withdraw","健康度检查失败 → 回滚"]}]},{"caseId":"revest","variant":"vulnerable","txHash":"0x9765f91c923700cca746f6fc5744a1f68c61f96e43efab4874af777a60386054","intro":"每个 FNFT 系列应有唯一 ID，且可赎回总额不能超过真实存入的 Toy Token。","outcome":"外层与回调路径同用 ID 2；接收方从 1 个 Toy Token 变成 6 个，金库从 100 降为 95。","steps":[{"title":"建立 FNFT 初始状态","detail":"金库有 100 个 Toy Token；接收方持有 1 个，并准备创建零存款的 FNFT 系列。","actor":"student","source":"脚本观察","metrics":{"初始接收方余额":"1","初始金库余额":"100"},"code":{"path":"contracts/revest/RevestLab.sol","symbol":"RevestCallbackStudent.runLesson","focusLine":155,"lines":[{"number":152,"text":"        fnft.setApprovalForAll(address(protocol), true);"},{"number":153,"text":""},{"number":154,"text":"        // A small base series makes depositAdditionalToFNFT available."},{"number":155,"text":"        baseId = protocol.createSeries(2, 0, address(this));"},{"number":156,"text":""},{"number":157,"text":"        armed = true;"},{"number":158,"text":"        createdId = protocol.createSeries(5, 0, address(this));"},{"number":159,"text":"        armed = false;"}]},"callPath":["runLesson"]},{"title":"FNFT 系列已创建，但下一个编号没更新","detail":"如果此时发生回调，另一条函数还能读到这个旧编号。","actor":"protocol","source":"链上事件","metrics":{"FNFT ID":"1","本次份额":"2","每份对应代币":"0"},"code":{"path":"contracts/revest/RevestLab.sol","symbol":"RevestVulnerable.createSeries","focusLine":70,"lines":[{"number":66,"text":"        require(!series[id].exists, \"ID already used\");"},{"number":67,"text":"        _takeDeposit(quantity, depositPerUnit);"},{"number":68,"text":"        series[id] = Series({exists: true, depositPerUnit: depositPerUnit});"},{"number":69,"text":""},{"number":70,"text":"        emit Step(\"series configured; nextId still stale\", id, quantity, depositPerUnit);"},{"number":71,"text":"        fnft.mint(receiver, id, quantity, \"\");"},{"number":72,"text":""},{"number":73,"text":"        // Too late: receiver code has already run."},{"number":74,"text":"        nextId = id + 1;"},{"number":75,"text":"        emit Step(\"nextId advanced after callback\", id, quantity, depositPerUnit);"},{"number":76,"text":"    }"},{"number":77,"text":""},{"number":78,"text":"    function depositAdditionalToFNFT("}]},"callPath":["runLesson","createSeries（基础系列）"]},{"title":"FNFT 接收回调","detail":"接收方确认 FNFT 到账；这一层不会再触发追加调用。","actor":"receiver","source":"链上事件","metrics":{"收到 FNFT ID":"1","收到份额":"2","尝试跨函数进入":"否"},"code":{"path":"contracts/revest/RevestLab.sol","symbol":"RevestCallbackStudent.onERC1155Received","focusLine":184,"lines":[{"number":179,"text":"        uint256 value,"},{"number":180,"text":"        bytes calldata"},{"number":181,"text":"    ) external returns (bytes4) {"},{"number":182,"text":"        callbacks += 1;"},{"number":183,"text":"        bool shouldTry = armed;"},{"number":184,"text":"        emit CallbackObserved(id, value, shouldTry);"},{"number":185,"text":""},{"number":186,"text":"        if (shouldTry) {"},{"number":187,"text":"            armed = false;"},{"number":188,"text":"            try protocol.depositAdditionalToFNFT(baseId, 1, 1, address(this)) returns ("},{"number":189,"text":"                uint256 newId"},{"number":190,"text":"            ) {"},{"number":191,"text":"                additionalId = newId;"},{"number":192,"text":"                reentrySucceeded = true;"},{"number":193,"text":"            } catch {"},{"number":194,"text":"                reentrySucceeded = false;"}]},"callPath":["runLesson","createSeries（基础系列）","ToyERC1155.mint","onERC1155Received"]},{"title":"回调结束后才递增 FNFT 编号","detail":"这次回调已经执行；如回调进入其他路径，对方可能已读取过期编号。","actor":"protocol","source":"链上事件","metrics":{"FNFT ID":"1","本次份额":"2","每份对应代币":"0"},"code":{"path":"contracts/revest/RevestLab.sol","symbol":"RevestVulnerable.createSeries","focusLine":75,"lines":[{"number":71,"text":"        fnft.mint(receiver, id, quantity, \"\");"},{"number":72,"text":""},{"number":73,"text":"        // Too late: receiver code has already run."},{"number":74,"text":"        nextId = id + 1;"},{"number":75,"text":"        emit Step(\"nextId advanced after callback\", id, quantity, depositPerUnit);"},{"number":76,"text":"    }"},{"number":77,"text":""},{"number":78,"text":"    function depositAdditionalToFNFT("},{"number":79,"text":"        uint256 baseId,"},{"number":80,"text":"        uint256 depositPerUnit,"},{"number":81,"text":"        uint256 quantity,"},{"number":82,"text":"        address receiver"},{"number":83,"text":"    ) external returns (uint256 newId) {"}]},"callPath":["runLesson","createSeries（基础系列）"]},{"title":"FNFT 系列已创建，但下一个编号没更新","detail":"如果此时发生回调，另一条函数还能读到这个旧编号。","actor":"protocol","source":"链上事件","metrics":{"FNFT ID":"2","本次份额":"5","每份对应代币":"0"},"code":{"path":"contracts/revest/RevestLab.sol","symbol":"RevestVulnerable.createSeries","focusLine":70,"lines":[{"number":66,"text":"        require(!series[id].exists, \"ID already used\");"},{"number":67,"text":"        _takeDeposit(quantity, depositPerUnit);"},{"number":68,"text":"        series[id] = Series({exists: true, depositPerUnit: depositPerUnit});"},{"number":69,"text":""},{"number":70,"text":"        emit Step(\"series configured; nextId still stale\", id, quantity, depositPerUnit);"},{"number":71,"text":"        fnft.mint(receiver, id, quantity, \"\");"},{"number":72,"text":""},{"number":73,"text":"        // Too late: receiver code has already run."},{"number":74,"text":"        nextId = id + 1;"},{"number":75,"text":"        emit Step(\"nextId advanced after callback\", id, quantity, depositPerUnit);"},{"number":76,"text":"    }"},{"number":77,"text":""},{"number":78,"text":"    function depositAdditionalToFNFT("}]},"callPath":["runLesson","createSeries（目标系列）"]},{"title":"ERC-1155 回调：进入追加存款函数","detail":"接收合约趁 nextId 尚未递增，调用 depositAdditionalToFNFT。","actor":"receiver","source":"链上事件","metrics":{"收到 FNFT ID":"2","收到份额":"5","尝试跨函数进入":"是"},"code":{"path":"contracts/revest/RevestLab.sol","symbol":"RevestCallbackStudent.onERC1155Received","focusLine":184,"lines":[{"number":179,"text":"        uint256 value,"},{"number":180,"text":"        bytes calldata"},{"number":181,"text":"    ) external returns (bytes4) {"},{"number":182,"text":"        callbacks += 1;"},{"number":183,"text":"        bool shouldTry = armed;"},{"number":184,"text":"        emit CallbackObserved(id, value, shouldTry);"},{"number":185,"text":""},{"number":186,"text":"        if (shouldTry) {"},{"number":187,"text":"            armed = false;"},{"number":188,"text":"            try protocol.depositAdditionalToFNFT(baseId, 1, 1, address(this)) returns ("},{"number":189,"text":"                uint256 newId"},{"number":190,"text":"            ) {"},{"number":191,"text":"                additionalId = newId;"},{"number":192,"text":"                reentrySucceeded = true;"},{"number":193,"text":"            } catch {"},{"number":194,"text":"                reentrySucceeded = false;"}]},"callPath":["runLesson","createSeries（目标系列）","ToyERC1155.mint","onERC1155Received"]},{"title":"回调路径复用了旧 ID","detail":"追加存款函数取得已被占用的编号，并覆盖了它的资产配置。","actor":"protocol","source":"链上事件","metrics":{"FNFT ID":"2","本次份额":"1","每份对应代币":"1"},"code":{"path":"contracts/revest/RevestLab.sol","symbol":"RevestVulnerable.depositAdditionalToFNFT","focusLine":90,"lines":[{"number":86,"text":""},{"number":87,"text":"        newId = nextId;"},{"number":88,"text":"        // Deliberately missing: require(!series[newId].exists)"},{"number":89,"text":"        series[newId] = Series({exists: true, depositPerUnit: depositPerUnit});"},{"number":90,"text":"        emit Step(\"stale ID configuration overwritten\", newId, quantity, depositPerUnit);"},{"number":91,"text":"        fnft.mint(receiver, newId, quantity, \"\");"},{"number":92,"text":"        nextId = newId + 1;"},{"number":93,"text":"    }"},{"number":94,"text":"}"},{"number":95,"text":""},{"number":96,"text":"/// @notice Fixed model: reserve IDs before callbacks and reject configuration collisions."},{"number":97,"text":"contract RevestFixed is RevestToyBase {"},{"number":98,"text":"    constructor(address assetAddress, address fnftAddress)"}]},"callPath":["runLesson","createSeries（目标系列）","ToyERC1155.mint","onERC1155Received","depositAdditionalToFNFT（跨函数）"]},{"title":"FNFT 接收回调","detail":"接收方确认 FNFT 到账；这一层不会再触发追加调用。","actor":"receiver","source":"链上事件","metrics":{"收到 FNFT ID":"2","收到份额":"1","尝试跨函数进入":"否"},"code":{"path":"contracts/revest/RevestLab.sol","symbol":"RevestCallbackStudent.onERC1155Received","focusLine":184,"lines":[{"number":179,"text":"        uint256 value,"},{"number":180,"text":"        bytes calldata"},{"number":181,"text":"    ) external returns (bytes4) {"},{"number":182,"text":"        callbacks += 1;"},{"number":183,"text":"        bool shouldTry = armed;"},{"number":184,"text":"        emit CallbackObserved(id, value, shouldTry);"},{"number":185,"text":""},{"number":186,"text":"        if (shouldTry) {"},{"number":187,"text":"            armed = false;"},{"number":188,"text":"            try protocol.depositAdditionalToFNFT(baseId, 1, 1, address(this)) returns ("},{"number":189,"text":"                uint256 newId"},{"number":190,"text":"            ) {"},{"number":191,"text":"                additionalId = newId;"},{"number":192,"text":"                reentrySucceeded = true;"},{"number":193,"text":"            } catch {"},{"number":194,"text":"                reentrySucceeded = false;"}]},"callPath":["runLesson","createSeries（目标系列）","ToyERC1155.mint","onERC1155Received","depositAdditionalToFNFT（跨函数）","ToyERC1155.mint","onERC1155Received（第二层）"]},{"title":"回调结束后才递增 FNFT 编号","detail":"这次回调已经执行；如回调进入其他路径，对方可能已读取过期编号。","actor":"protocol","source":"链上事件","metrics":{"FNFT ID":"2","本次份额":"5","每份对应代币":"0"},"code":{"path":"contracts/revest/RevestLab.sol","symbol":"RevestVulnerable.createSeries","focusLine":75,"lines":[{"number":71,"text":"        fnft.mint(receiver, id, quantity, \"\");"},{"number":72,"text":""},{"number":73,"text":"        // Too late: receiver code has already run."},{"number":74,"text":"        nextId = id + 1;"},{"number":75,"text":"        emit Step(\"nextId advanced after callback\", id, quantity, depositPerUnit);"},{"number":76,"text":"    }"},{"number":77,"text":""},{"number":78,"text":"    function depositAdditionalToFNFT("},{"number":79,"text":"        uint256 baseId,"},{"number":80,"text":"        uint256 depositPerUnit,"},{"number":81,"text":"        uint256 quantity,"},{"number":82,"text":"        address receiver"},{"number":83,"text":"    ) external returns (uint256 newId) {"}]},"callPath":["runLesson","createSeries（目标系列）"]},{"title":"FNFT 份额被赎回","detail":"观察可赎回份额与金库真实资产之间是否保持一致。","actor":"protocol","source":"链上事件","metrics":{"FNFT ID":"2","本次份额":"6","每份对应代币":"1"},"code":{"path":"contracts/revest/RevestLab.sol","symbol":"RevestToyBase.redeem","focusLine":44,"lines":[{"number":40,"text":"        require(series[id].exists, \"unknown series\");"},{"number":41,"text":"        fnft.burn(msg.sender, id, quantity);"},{"number":42,"text":"        uint256 payout = quantity * series[id].depositPerUnit;"},{"number":43,"text":"        require(asset.transfer(msg.sender, payout), \"payout failed\");"},{"number":44,"text":"        emit Step(\"series redeemed\", id, quantity, series[id].depositPerUnit);"},{"number":45,"text":"    }"},{"number":46,"text":""},{"number":47,"text":"    function _takeDeposit(uint256 quantity, uint256 depositPerUnit) internal {"},{"number":48,"text":"        uint256 total = quantity * depositPerUnit;"},{"number":49,"text":"        if (total != 0) {"},{"number":50,"text":"            require(asset.transferFrom(msg.sender, address(this), total), \"deposit failed\");"},{"number":51,"text":"        }"},{"number":52,"text":"    }"}]},"callPath":["runLesson","redeem"]},{"title":"读取交易后的状态","detail":"旧 ID 被重复使用，使零存款的多个份额获得了错误的赎回价值。","actor":"student","source":"脚本观察","metrics":{"外层系列 ID":"2","回调系列 ID":"2","接收方 Toy 余额":"6","金库 Toy 余额":"95"},"callPath":["读取最终状态"]}]},{"caseId":"revest","variant":"fixed","txHash":"0x27e3d3808627d65ac8aefb9e4c582e0b5bc51fbd779b4a03ddcf7138defe8966","intro":"每个 FNFT 系列应有唯一 ID，且可赎回总额不能超过真实存入的 Toy Token。","outcome":"外层 ID 2、回调路径 ID 3；接收方仍有 1 个 Toy Token，金库仍有 100。","steps":[{"title":"建立 FNFT 初始状态","detail":"金库有 100 个 Toy Token；接收方持有 1 个，并准备创建零存款的 FNFT 系列。","actor":"student","source":"脚本观察","metrics":{"初始接收方余额":"1","初始金库余额":"100"},"code":{"path":"contracts/revest/RevestLab.sol","symbol":"RevestCallbackStudent.runLesson","focusLine":155,"lines":[{"number":152,"text":"        fnft.setApprovalForAll(address(protocol), true);"},{"number":153,"text":""},{"number":154,"text":"        // A small base series makes depositAdditionalToFNFT available."},{"number":155,"text":"        baseId = protocol.createSeries(2, 0, address(this));"},{"number":156,"text":""},{"number":157,"text":"        armed = true;"},{"number":158,"text":"        createdId = protocol.createSeries(5, 0, address(this));"},{"number":159,"text":"        armed = false;"}]},"callPath":["runLesson"]},{"title":"先预留唯一 FNFT ID","detail":"修复版在 ERC-1155 铸造与回调之前就递增下一个编号。","actor":"protocol","source":"链上事件","metrics":{"FNFT ID":"1","本次份额":"2","每份对应代币":"0"},"code":{"path":"contracts/revest/RevestLab.sol","symbol":"RevestFixed.createSeries","focusLine":110,"lines":[{"number":106,"text":"        id = nextId++;"},{"number":107,"text":"        require(!series[id].exists, \"ID already used\");"},{"number":108,"text":"        _takeDeposit(quantity, depositPerUnit);"},{"number":109,"text":"        series[id] = Series({exists: true, depositPerUnit: depositPerUnit});"},{"number":110,"text":"        emit Step(\"unique ID reserved before callback\", id, quantity, depositPerUnit);"},{"number":111,"text":"        fnft.mint(receiver, id, quantity, \"\");"},{"number":112,"text":"    }"},{"number":113,"text":""},{"number":114,"text":"    function depositAdditionalToFNFT("},{"number":115,"text":"        uint256 baseId,"},{"number":116,"text":"        uint256 depositPerUnit,"},{"number":117,"text":"        uint256 quantity,"},{"number":118,"text":"        address receiver"}]},"callPath":["runLesson","createSeries（基础系列）"]},{"title":"FNFT 接收回调","detail":"接收方确认 FNFT 到账；这一层不会再触发追加调用。","actor":"receiver","source":"链上事件","metrics":{"收到 FNFT ID":"1","收到份额":"2","尝试跨函数进入":"否"},"code":{"path":"contracts/revest/RevestLab.sol","symbol":"RevestCallbackStudent.onERC1155Received","focusLine":184,"lines":[{"number":179,"text":"        uint256 value,"},{"number":180,"text":"        bytes calldata"},{"number":181,"text":"    ) external returns (bytes4) {"},{"number":182,"text":"        callbacks += 1;"},{"number":183,"text":"        bool shouldTry = armed;"},{"number":184,"text":"        emit CallbackObserved(id, value, shouldTry);"},{"number":185,"text":""},{"number":186,"text":"        if (shouldTry) {"},{"number":187,"text":"            armed = false;"},{"number":188,"text":"            try protocol.depositAdditionalToFNFT(baseId, 1, 1, address(this)) returns ("},{"number":189,"text":"                uint256 newId"},{"number":190,"text":"            ) {"},{"number":191,"text":"                additionalId = newId;"},{"number":192,"text":"                reentrySucceeded = true;"},{"number":193,"text":"            } catch {"},{"number":194,"text":"                reentrySucceeded = false;"}]},"callPath":["runLesson","createSeries（基础系列）","ToyERC1155.mint","onERC1155Received"]},{"title":"先预留唯一 FNFT ID","detail":"修复版在 ERC-1155 铸造与回调之前就递增下一个编号。","actor":"protocol","source":"链上事件","metrics":{"FNFT ID":"2","本次份额":"5","每份对应代币":"0"},"code":{"path":"contracts/revest/RevestLab.sol","symbol":"RevestFixed.createSeries","focusLine":110,"lines":[{"number":106,"text":"        id = nextId++;"},{"number":107,"text":"        require(!series[id].exists, \"ID already used\");"},{"number":108,"text":"        _takeDeposit(quantity, depositPerUnit);"},{"number":109,"text":"        series[id] = Series({exists: true, depositPerUnit: depositPerUnit});"},{"number":110,"text":"        emit Step(\"unique ID reserved before callback\", id, quantity, depositPerUnit);"},{"number":111,"text":"        fnft.mint(receiver, id, quantity, \"\");"},{"number":112,"text":"    }"},{"number":113,"text":""},{"number":114,"text":"    function depositAdditionalToFNFT("},{"number":115,"text":"        uint256 baseId,"},{"number":116,"text":"        uint256 depositPerUnit,"},{"number":117,"text":"        uint256 quantity,"},{"number":118,"text":"        address receiver"}]},"callPath":["runLesson","createSeries（目标系列）"]},{"title":"ERC-1155 回调：进入追加存款函数","detail":"接收合约也进入 depositAdditionalToFNFT，但 nextId 已预留新编号，不会覆盖外层系列。","actor":"receiver","source":"链上事件","metrics":{"收到 FNFT ID":"2","收到份额":"5","尝试跨函数进入":"是"},"code":{"path":"contracts/revest/RevestLab.sol","symbol":"RevestCallbackStudent.onERC1155Received","focusLine":184,"lines":[{"number":179,"text":"        uint256 value,"},{"number":180,"text":"        bytes calldata"},{"number":181,"text":"    ) external returns (bytes4) {"},{"number":182,"text":"        callbacks += 1;"},{"number":183,"text":"        bool shouldTry = armed;"},{"number":184,"text":"        emit CallbackObserved(id, value, shouldTry);"},{"number":185,"text":""},{"number":186,"text":"        if (shouldTry) {"},{"number":187,"text":"            armed = false;"},{"number":188,"text":"            try protocol.depositAdditionalToFNFT(baseId, 1, 1, address(this)) returns ("},{"number":189,"text":"                uint256 newId"},{"number":190,"text":"            ) {"},{"number":191,"text":"                additionalId = newId;"},{"number":192,"text":"                reentrySucceeded = true;"},{"number":193,"text":"            } catch {"},{"number":194,"text":"                reentrySucceeded = false;"}]},"callPath":["runLesson","createSeries（目标系列）","ToyERC1155.mint","onERC1155Received"]},{"title":"追加存款取得不同的 ID","detail":"外层系列的配置不会被回调路径覆盖。","actor":"protocol","source":"链上事件","metrics":{"FNFT ID":"3","本次份额":"1","每份对应代币":"1"},"code":{"path":"contracts/revest/RevestLab.sol","symbol":"RevestFixed.depositAdditionalToFNFT","focusLine":125,"lines":[{"number":121,"text":"        newId = nextId++;"},{"number":122,"text":"        require(!series[newId].exists, \"ID already used\");"},{"number":123,"text":"        _takeDeposit(quantity, depositPerUnit);"},{"number":124,"text":"        series[newId] = Series({exists: true, depositPerUnit: depositPerUnit});"},{"number":125,"text":"        emit Step(\"additional deposit gets a distinct ID\", newId, quantity, depositPerUnit);"},{"number":126,"text":"        fnft.mint(receiver, newId, quantity, \"\");"},{"number":127,"text":"    }"},{"number":128,"text":"}"},{"number":129,"text":""},{"number":130,"text":"contract RevestCallbackStudent is IERC1155Receiver {"},{"number":131,"text":"    IRevestToy public immutable protocol;"},{"number":132,"text":"    ToyERC20 public immutable asset;"},{"number":133,"text":"    ToyERC1155 public immutable fnft;"}]},"callPath":["runLesson","createSeries（目标系列）","ToyERC1155.mint","onERC1155Received","depositAdditionalToFNFT（跨函数）"]},{"title":"FNFT 接收回调","detail":"接收方确认 FNFT 到账；这一层不会再触发追加调用。","actor":"receiver","source":"链上事件","metrics":{"收到 FNFT ID":"3","收到份额":"1","尝试跨函数进入":"否"},"code":{"path":"contracts/revest/RevestLab.sol","symbol":"RevestCallbackStudent.onERC1155Received","focusLine":184,"lines":[{"number":179,"text":"        uint256 value,"},{"number":180,"text":"        bytes calldata"},{"number":181,"text":"    ) external returns (bytes4) {"},{"number":182,"text":"        callbacks += 1;"},{"number":183,"text":"        bool shouldTry = armed;"},{"number":184,"text":"        emit CallbackObserved(id, value, shouldTry);"},{"number":185,"text":""},{"number":186,"text":"        if (shouldTry) {"},{"number":187,"text":"            armed = false;"},{"number":188,"text":"            try protocol.depositAdditionalToFNFT(baseId, 1, 1, address(this)) returns ("},{"number":189,"text":"                uint256 newId"},{"number":190,"text":"            ) {"},{"number":191,"text":"                additionalId = newId;"},{"number":192,"text":"                reentrySucceeded = true;"},{"number":193,"text":"            } catch {"},{"number":194,"text":"                reentrySucceeded = false;"}]},"callPath":["runLesson","createSeries（目标系列）","ToyERC1155.mint","onERC1155Received","depositAdditionalToFNFT（跨函数）","ToyERC1155.mint","onERC1155Received（第二层）"]},{"title":"FNFT 份额被赎回","detail":"观察可赎回份额与金库真实资产之间是否保持一致。","actor":"protocol","source":"链上事件","metrics":{"FNFT ID":"2","本次份额":"5","每份对应代币":"0"},"code":{"path":"contracts/revest/RevestLab.sol","symbol":"RevestToyBase.redeem","focusLine":44,"lines":[{"number":40,"text":"        require(series[id].exists, \"unknown series\");"},{"number":41,"text":"        fnft.burn(msg.sender, id, quantity);"},{"number":42,"text":"        uint256 payout = quantity * series[id].depositPerUnit;"},{"number":43,"text":"        require(asset.transfer(msg.sender, payout), \"payout failed\");"},{"number":44,"text":"        emit Step(\"series redeemed\", id, quantity, series[id].depositPerUnit);"},{"number":45,"text":"    }"},{"number":46,"text":""},{"number":47,"text":"    function _takeDeposit(uint256 quantity, uint256 depositPerUnit) internal {"},{"number":48,"text":"        uint256 total = quantity * depositPerUnit;"},{"number":49,"text":"        if (total != 0) {"},{"number":50,"text":"            require(asset.transferFrom(msg.sender, address(this), total), \"deposit failed\");"},{"number":51,"text":"        }"},{"number":52,"text":"    }"}]},"callPath":["runLesson","redeem（目标系列）"]},{"title":"FNFT 份额被赎回","detail":"观察可赎回份额与金库真实资产之间是否保持一致。","actor":"protocol","source":"链上事件","metrics":{"FNFT ID":"3","本次份额":"1","每份对应代币":"1"},"code":{"path":"contracts/revest/RevestLab.sol","symbol":"RevestToyBase.redeem","focusLine":44,"lines":[{"number":40,"text":"        require(series[id].exists, \"unknown series\");"},{"number":41,"text":"        fnft.burn(msg.sender, id, quantity);"},{"number":42,"text":"        uint256 payout = quantity * series[id].depositPerUnit;"},{"number":43,"text":"        require(asset.transfer(msg.sender, payout), \"payout failed\");"},{"number":44,"text":"        emit Step(\"series redeemed\", id, quantity, series[id].depositPerUnit);"},{"number":45,"text":"    }"},{"number":46,"text":""},{"number":47,"text":"    function _takeDeposit(uint256 quantity, uint256 depositPerUnit) internal {"},{"number":48,"text":"        uint256 total = quantity * depositPerUnit;"},{"number":49,"text":"        if (total != 0) {"},{"number":50,"text":"            require(asset.transferFrom(msg.sender, address(this), total), \"deposit failed\");"},{"number":51,"text":"        }"},{"number":52,"text":"    }"}]},"callPath":["runLesson","redeem（追加系列）"]},{"title":"读取交易后的状态","detail":"编号在回调前预留，两个系列互不覆盖，资产守恒。","actor":"student","source":"脚本观察","metrics":{"外层系列 ID":"2","回调系列 ID":"3","接收方 Toy 余额":"1","金库 Toy 余额":"100"},"callPath":["读取最终状态"]}]}]};
+    const names = { hypebears: "HypeBears · 同函数重入", omni: "OMNI · 跨函数重入", revest: "Revest · ERC-1155 编号冲突" };
+    const actorNames = { student: "发起者", protocol: "协议合约", nft: "NFT 合约", receiver: "接收回调" };
+    let caseId = "hypebears";
+    let variant = "vulnerable";
+    let index = 0;
+    let timer = null;
+
+    const byId = (id) => document.getElementById(id);
+    const scenario = () => payload.scenarios.find((item) => item.caseId === caseId && item.variant === variant);
+
+    function stopPlayback() {
+      if (timer !== null) clearInterval(timer);
+      timer = null;
+      byId("play").textContent = "▶ 自动播放";
+    }
+
+    function setCase(nextCase) {
+      stopPlayback();
+      caseId = nextCase;
+      index = 0;
+      render();
+    }
+
+    function setVariant(nextVariant) {
+      stopPlayback();
+      variant = nextVariant;
+      index = 0;
+      render();
+    }
+
+    function setIndex(nextIndex) {
+      const current = scenario();
+      index = Math.max(0, Math.min(current.steps.length - 1, nextIndex));
+      render();
+    }
+
+    function renderTimeline(current) {
+      const list = byId("timeline-list");
+      list.replaceChildren();
+      current.steps.forEach((step, position) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        if (position === index) button.setAttribute("aria-current", "step");
+        button.setAttribute("aria-label", `第 ${position + 1} 步：${step.title}`);
+        const number = document.createElement("span");
+        number.className = "number";
+        number.textContent = String(position + 1).padStart(2, "0");
+        const label = document.createElement("span");
+        label.className = "label";
+        label.textContent = step.title;
+        button.append(number, label);
+        button.addEventListener("click", () => { stopPlayback(); setIndex(position); });
+        list.append(button);
+      });
+    }
+
+    function renderCode(step) {
+      const code = step.code;
+      const window = byId("code-window");
+      window.replaceChildren();
+      if (!code) {
+        byId("code-location").textContent = "无链上源码行";
+        byId("code-symbol").textContent = "交易前后读取状态 / 回滚结果";
+        const empty = document.createElement("p");
+        empty.className = "code-empty";
+        empty.textContent = "这一步是实验脚本的观察，不对应交易内部某一条成功执行的 Solidity 指令。";
+        window.append(empty);
+        return;
+      }
+      byId("code-location").textContent = `${code.path}:${code.focusLine}`;
+      byId("code-symbol").textContent = code.symbol;
+      for (const line of code.lines) {
+        const row = document.createElement("div");
+        row.className = `code-line${line.number === code.focusLine ? " focus" : ""}`;
+        const number = document.createElement("span");
+        number.className = "line-number";
+        number.textContent = String(line.number);
+        const source = document.createElement("code");
+        source.textContent = line.text || " ";
+        row.append(number, source);
+        window.append(row);
+      }
+      window.scrollLeft = 0;
+    }
+
+    function renderCallPath(step) {
+      const path = byId("call-path");
+      path.replaceChildren();
+      for (const [position, label] of (step.callPath ?? []).entries()) {
+        if (position > 0) {
+          const arrow = document.createElement("span");
+          arrow.className = "arrow";
+          arrow.textContent = "→";
+          path.append(arrow);
+        }
+        const crumb = document.createElement("span");
+        crumb.className = "crumb";
+        crumb.textContent = label;
+        path.append(crumb);
+      }
+    }
+
+    function render() {
+      const current = scenario();
+      const step = current.steps[index];
+
+      document.querySelectorAll("[data-case]").forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.dataset.case === caseId));
+      });
+      document.querySelectorAll("[data-version]").forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.dataset.version === variant));
+      });
+
+      byId("scenario-heading").textContent = names[caseId];
+      byId("tx-hash").textContent = current.txHash ? `本地交易 ${current.txHash.slice(0, 10)}…${current.txHash.slice(-6)}` : "交易回滚 · 无收据事件";
+      byId("intro").textContent = current.intro;
+      byId("outcome").textContent = current.outcome;
+      byId("result-box").classList.toggle("good", variant === "fixed");
+
+      byId("step-count").textContent = `步骤 ${index + 1} / ${current.steps.length}`;
+      byId("step-source").textContent = step.source;
+      byId("progress").setAttribute("aria-valuenow", String(index + 1));
+      byId("progress").setAttribute("aria-valuemax", String(current.steps.length));
+      byId("progress-fill").style.width = `${((index + 1) / current.steps.length) * 100}%`;
+
+      document.querySelectorAll(".actor").forEach((actor) => {
+        actor.classList.toggle("active", actor.dataset.actor === step.actor);
+      });
+      byId("reentry-line").classList.toggle("visible", step.actor === "receiver" && step.title.includes("进入") || step.title.includes("再次调用"));
+
+      byId("current-category").textContent = `${actorNames[step.actor]} · ${step.source}`;
+      byId("current-title").textContent = step.title;
+      byId("current-detail").textContent = step.detail;
+      const metrics = byId("metrics");
+      metrics.replaceChildren();
+      for (const [label, value] of Object.entries(step.metrics ?? {})) {
+        const metric = document.createElement("div");
+        metric.className = "metric";
+        const metricLabel = document.createElement("span");
+        metricLabel.className = "label";
+        metricLabel.textContent = label;
+        const metricValue = document.createElement("span");
+        metricValue.className = "value";
+        metricValue.textContent = value;
+        metric.append(metricLabel, metricValue);
+        metrics.append(metric);
+      }
+      renderCallPath(step);
+      renderCode(step);
+
+      byId("previous").disabled = index === 0;
+      byId("next").disabled = index === current.steps.length - 1;
+      renderTimeline(current);
+    }
+
+    document.querySelectorAll("[data-case]").forEach((button) => {
+      button.addEventListener("click", () => setCase(button.dataset.case));
+    });
+    document.querySelectorAll("[data-version]").forEach((button) => {
+      button.addEventListener("click", () => setVariant(button.dataset.version));
+    });
+    byId("previous").addEventListener("click", () => { stopPlayback(); setIndex(index - 1); });
+    byId("next").addEventListener("click", () => { stopPlayback(); setIndex(index + 1); });
+    byId("play").addEventListener("click", () => {
+      if (timer !== null) { stopPlayback(); return; }
+      if (index === scenario().steps.length - 1) index = 0;
+      render();
+      byId("play").textContent = "Ⅱ 暂停";
+      timer = setInterval(() => {
+        if (index >= scenario().steps.length - 1) { stopPlayback(); return; }
+        setIndex(index + 1);
+      }, 1650);
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowRight") { stopPlayback(); setIndex(index + 1); }
+      if (event.key === "ArrowLeft") { stopPlayback(); setIndex(index - 1); }
+    });
+    render();
+  </script>
+</body>
+</html>

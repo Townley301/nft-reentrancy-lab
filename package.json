@@ -8,10 +8,12 @@
     "compile": "hardhat compile",
     "test": "hardhat test nodejs",
     "demo": "hardhat run scripts/run-all.ts",
+    "visual": "hardhat run scripts/generate-visual-report.ts",
     "node": "hardhat node"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox-viem": "5.0.7",
-    "hardhat": "3.16.0"
+    "hardhat": "3.16.0",
+    "viem": "2.56.3"
   }
 }

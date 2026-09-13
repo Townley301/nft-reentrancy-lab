@@ -30,7 +30,23 @@
 pnpm install
 pnpm test
 pnpm demo
+pnpm visual
 ```
+
+### 用图形页面逐步观察
+
+`pnpm visual` 会重新创建一条临时本地链，运行三个教学案例的漏洞版和修复版，并把**实际本地交易收据中的事件日志**连同交易前后的状态，写入项目根目录的 `visual-report.html`。该文件已经随项目提供一份示例结果；想刷新结果时再执行生成命令即可。
+
+在 PyCharm 中可直接找到 `visual-report.html`，右键选择 **Open in Browser**；也可以在访达中双击它。页面不需要服务器，也不会连接外部网站。你可以：
+
+- 在 HypeBears、OMNI、Revest 之间切换；
+- 对比“漏洞版”和“修复版”；
+- 点击事件列表，或使用“上一步 / 下一步 / 自动播放”观察调用顺序；
+- 查看每一步由谁执行、关键状态值以及最终结果；
+- 在“这一步对应的代码”面板查看源码文件、函数、行号及高亮语句；
+- 沿着当前调用路径观察 `mint / transfer → 接收回调 → 重入其他函数 → 返回外层`。
+
+页面中的“链上事件”是教学合约在本地临时链交易里发出的日志；“脚本观察”是交易前后读取的状态或回滚结果。代码行号和片段在生成页面时直接读取项目内的 Solidity 文件，修改源码后请重新运行 `pnpm visual`。调用路径按教学合约的结构标注，**不是由 EVM 调试器生成的逐指令调用栈**；事件之间未打点的内部语句不会逐条出现。它也不是历史主网攻击的完整复现。
 
 也可以启动一个持续运行的本地节点：
 
@@ -74,9 +90,13 @@ contracts/
 ├── omni/OmniLab.sol
 └── revest/RevestLab.sol
 scripts/
-└── run-all.ts
+├── run-all.ts
+└── generate-visual-report.ts
 test/
 └── reentrancy-lab.ts
+viewer/
+└── template.html
+visual-report.html
 ```
 
 每个案例均包含：
