@@ -1,0 +1,590 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-15T06:58:15.152Z",
+  "compiler": "0.8.28+commit.7893614a",
+  "safetyBoundary": {
+    "source": "仅本地 Hardhat 编译器 AST",
+    "rpcCalls": false,
+    "privateKeys": false,
+    "realAssets": false,
+    "conclusion": "候选路径需要人工验证"
+  },
+  "summary": {
+    "contractsInspected": 16,
+    "callbackFunctions": 12,
+    "unmitigatedCandidates": 13
+  },
+  "contracts": [
+    {
+      "contract": "ToyERC20",
+      "file": "contracts/common/ToyAssets.sol",
+      "callbackFunctions": [],
+      "reentryCandidates": []
+    },
+    {
+      "contract": "ToyERC721",
+      "file": "contracts/common/ToyAssets.sol",
+      "callbackFunctions": [
+        {
+          "function": "safeTransferFrom",
+          "signature": "safeTransferFrom(address,address,uint256)",
+          "file": "contracts/common/ToyAssets.sol",
+          "line": 90,
+          "callbacks": [
+            {
+              "kind": "ERC-721 receiver callback",
+              "call": "onERC721Received",
+              "file": "contracts/common/ToyAssets.sol",
+              "line": 93,
+              "originFunction": "safeTransferFrom",
+              "statesAccessedAfterCallback": []
+            }
+          ]
+        }
+      ],
+      "reentryCandidates": []
+    },
+    {
+      "contract": "ToyERC1155",
+      "file": "contracts/common/ToyAssets.sol",
+      "callbackFunctions": [
+        {
+          "function": "mint",
+          "signature": "mint(address,uint256,uint256,bytes)",
+          "file": "contracts/common/ToyAssets.sol",
+          "line": 117,
+          "callbacks": [
+            {
+              "kind": "ERC-1155 receiver callback",
+              "call": "onERC1155Received",
+              "file": "contracts/common/ToyAssets.sol",
+              "line": 122,
+              "originFunction": "mint",
+              "statesAccessedAfterCallback": []
+            }
+          ]
+        }
+      ],
+      "reentryCandidates": []
+    },
+    {
+      "contract": "HypeBearsToyBase",
+      "file": "contracts/hypebears/HypeBearsLab.sol",
+      "callbackFunctions": [],
+      "reentryCandidates": []
+    },
+    {
+      "contract": "HypeBearsVulnerable",
+      "file": "contracts/hypebears/HypeBearsLab.sol",
+      "callbackFunctions": [
+        {
+          "function": "mintNFT",
+          "signature": "mintNFT()",
+          "file": "contracts/hypebears/HypeBearsLab.sol",
+          "line": 36,
+          "callbacks": [
+            {
+              "kind": "ERC-721 receiver callback",
+              "call": "mintNFT -> _safeMint",
+              "file": "contracts/hypebears/HypeBearsLab.sol",
+              "line": 39,
+              "originFunction": "_safeMint",
+              "statesAccessedAfterCallback": [
+                "addressMinted",
+                "balanceOf"
+              ]
+            }
+          ]
+        }
+      ],
+      "reentryCandidates": [
+        {
+          "outerFunction": "mintNFT",
+          "callback": "ERC-721 receiver callback",
+          "callbackLine": 39,
+          "candidateFunction": "mintNFT",
+          "candidateLine": 36,
+          "pattern": "same-function",
+          "severity": "high",
+          "sharedStates": [
+            "addressMinted",
+            "balanceOf",
+            "nextTokenId",
+            "ownerOf"
+          ],
+          "statesUsedAfterCallback": [
+            "addressMinted",
+            "balanceOf"
+          ],
+          "guard": "未观察到共享 nonReentrant 修饰器",
+          "rationale": "mintNFT 可写入 addressMinted, balanceOf；mintNFT 会在回调后继续访问这些状态。"
+        }
+      ]
+    },
+    {
+      "contract": "HypeBearsFixed",
+      "file": "contracts/hypebears/HypeBearsLab.sol",
+      "callbackFunctions": [
+        {
+          "function": "mintNFT",
+          "signature": "mintNFT()",
+          "file": "contracts/hypebears/HypeBearsLab.sol",
+          "line": 47,
+          "callbacks": [
+            {
+              "kind": "ERC-721 receiver callback",
+              "call": "mintNFT -> _safeMint",
+              "file": "contracts/hypebears/HypeBearsLab.sol",
+              "line": 51,
+              "originFunction": "_safeMint",
+              "statesAccessedAfterCallback": []
+            }
+          ]
+        }
+      ],
+      "reentryCandidates": []
+    },
+    {
+      "contract": "HypeBearsCallbackStudent",
+      "file": "contracts/hypebears/HypeBearsLab.sol",
+      "callbackFunctions": [],
+      "reentryCandidates": []
+    },
+    {
+      "contract": "OmniToyPoolBase",
+      "file": "contracts/omni/OmniLab.sol",
+      "callbackFunctions": [],
+      "reentryCandidates": []
+    },
+    {
+      "contract": "OmniPoolVulnerable",
+      "file": "contracts/omni/OmniLab.sol",
+      "callbackFunctions": [
+        {
+          "function": "withdraw",
+          "signature": "withdraw(uint256,address)",
+          "file": "contracts/omni/OmniLab.sol",
+          "line": 61,
+          "callbacks": [
+            {
+              "kind": "ERC-721 safe-transfer callback",
+              "call": "safeTransferFrom",
+              "file": "contracts/omni/OmniLab.sol",
+              "line": 70,
+              "originFunction": "withdraw",
+              "statesAccessedAfterCallback": [
+                "collateralCount",
+                "debt",
+                "usingAsCollateral"
+              ]
+            }
+          ]
+        },
+        {
+          "function": "liquidate",
+          "signature": "liquidate(address,uint256,address)",
+          "file": "contracts/omni/OmniLab.sol",
+          "line": 82,
+          "callbacks": [
+            {
+              "kind": "ERC-721 safe-transfer callback",
+              "call": "safeTransferFrom",
+              "file": "contracts/omni/OmniLab.sol",
+              "line": 95,
+              "originFunction": "liquidate",
+              "statesAccessedAfterCallback": [
+                "collateralCount",
+                "debt",
+                "usingAsCollateral"
+              ]
+            }
+          ]
+        }
+      ],
+      "reentryCandidates": [
+        {
+          "outerFunction": "withdraw",
+          "callback": "ERC-721 safe-transfer callback",
+          "callbackLine": 70,
+          "candidateFunction": "withdraw",
+          "candidateLine": 61,
+          "pattern": "same-function",
+          "severity": "high",
+          "sharedStates": [
+            "collateralCount",
+            "debt",
+            "depositorOf",
+            "usingAsCollateral"
+          ],
+          "statesUsedAfterCallback": [
+            "collateralCount",
+            "usingAsCollateral"
+          ],
+          "guard": "未观察到共享 nonReentrant 修饰器",
+          "rationale": "withdraw 可写入 collateralCount, usingAsCollateral；withdraw 会在回调后继续访问这些状态。"
+        },
+        {
+          "outerFunction": "withdraw",
+          "callback": "ERC-721 safe-transfer callback",
+          "callbackLine": 70,
+          "candidateFunction": "liquidate",
+          "candidateLine": 82,
+          "pattern": "cross-function",
+          "severity": "high",
+          "sharedStates": [
+            "collateralCount",
+            "debt",
+            "depositorOf",
+            "usingAsCollateral"
+          ],
+          "statesUsedAfterCallback": [
+            "collateralCount",
+            "debt",
+            "usingAsCollateral"
+          ],
+          "guard": "未观察到共享 nonReentrant 修饰器",
+          "rationale": "liquidate 可写入 collateralCount, debt, usingAsCollateral；withdraw 会在回调后继续访问这些状态。"
+        },
+        {
+          "outerFunction": "withdraw",
+          "callback": "ERC-721 safe-transfer callback",
+          "callbackLine": 70,
+          "candidateFunction": "supply",
+          "candidateLine": 32,
+          "pattern": "cross-function",
+          "severity": "high",
+          "sharedStates": [
+            "collateralCount",
+            "debt",
+            "depositorOf",
+            "usingAsCollateral"
+          ],
+          "statesUsedAfterCallback": [
+            "collateralCount",
+            "usingAsCollateral"
+          ],
+          "guard": "未观察到共享 nonReentrant 修饰器",
+          "rationale": "supply 可写入 collateralCount, usingAsCollateral；withdraw 会在回调后继续访问这些状态。"
+        },
+        {
+          "outerFunction": "liquidate",
+          "callback": "ERC-721 safe-transfer callback",
+          "callbackLine": 95,
+          "candidateFunction": "withdraw",
+          "candidateLine": 61,
+          "pattern": "cross-function",
+          "severity": "high",
+          "sharedStates": [
+            "collateralCount",
+            "debt",
+            "depositorOf",
+            "usingAsCollateral"
+          ],
+          "statesUsedAfterCallback": [
+            "collateralCount",
+            "usingAsCollateral"
+          ],
+          "guard": "未观察到共享 nonReentrant 修饰器",
+          "rationale": "withdraw 可写入 collateralCount, usingAsCollateral；liquidate 会在回调后继续访问这些状态。"
+        },
+        {
+          "outerFunction": "liquidate",
+          "callback": "ERC-721 safe-transfer callback",
+          "callbackLine": 95,
+          "candidateFunction": "liquidate",
+          "candidateLine": 82,
+          "pattern": "same-function",
+          "severity": "high",
+          "sharedStates": [
+            "collateralCount",
+            "debt",
+            "depositorOf",
+            "usingAsCollateral"
+          ],
+          "statesUsedAfterCallback": [
+            "collateralCount",
+            "debt",
+            "usingAsCollateral"
+          ],
+          "guard": "未观察到共享 nonReentrant 修饰器",
+          "rationale": "liquidate 可写入 collateralCount, debt, usingAsCollateral；liquidate 会在回调后继续访问这些状态。"
+        },
+        {
+          "outerFunction": "liquidate",
+          "callback": "ERC-721 safe-transfer callback",
+          "callbackLine": 95,
+          "candidateFunction": "supply",
+          "candidateLine": 32,
+          "pattern": "cross-function",
+          "severity": "high",
+          "sharedStates": [
+            "collateralCount",
+            "debt",
+            "depositorOf",
+            "usingAsCollateral"
+          ],
+          "statesUsedAfterCallback": [
+            "collateralCount",
+            "usingAsCollateral"
+          ],
+          "guard": "未观察到共享 nonReentrant 修饰器",
+          "rationale": "supply 可写入 collateralCount, usingAsCollateral；liquidate 会在回调后继续访问这些状态。"
+        },
+        {
+          "outerFunction": "withdraw",
+          "callback": "ERC-721 safe-transfer callback",
+          "callbackLine": 70,
+          "candidateFunction": "borrow",
+          "candidateLine": 40,
+          "pattern": "cross-function",
+          "severity": "medium",
+          "sharedStates": [
+            "collateralCount",
+            "debt"
+          ],
+          "statesUsedAfterCallback": [
+            "debt"
+          ],
+          "guard": "未观察到共享 nonReentrant 修饰器",
+          "rationale": "borrow 可写入 debt；withdraw 会在回调后继续访问这些状态。"
+        },
+        {
+          "outerFunction": "liquidate",
+          "callback": "ERC-721 safe-transfer callback",
+          "callbackLine": 95,
+          "candidateFunction": "borrow",
+          "candidateLine": 40,
+          "pattern": "cross-function",
+          "severity": "medium",
+          "sharedStates": [
+            "collateralCount",
+            "debt"
+          ],
+          "statesUsedAfterCallback": [
+            "debt"
+          ],
+          "guard": "未观察到共享 nonReentrant 修饰器",
+          "rationale": "borrow 可写入 debt；liquidate 会在回调后继续访问这些状态。"
+        }
+      ]
+    },
+    {
+      "contract": "OmniPoolFixed",
+      "file": "contracts/omni/OmniLab.sol",
+      "callbackFunctions": [
+        {
+          "function": "withdraw",
+          "signature": "withdraw(uint256,address)",
+          "file": "contracts/omni/OmniLab.sol",
+          "line": 119,
+          "callbacks": [
+            {
+              "kind": "ERC-721 safe-transfer callback",
+              "call": "safeTransferFrom",
+              "file": "contracts/omni/OmniLab.sol",
+              "line": 130,
+              "originFunction": "withdraw",
+              "statesAccessedAfterCallback": []
+            }
+          ]
+        },
+        {
+          "function": "liquidate",
+          "signature": "liquidate(address,uint256,address)",
+          "file": "contracts/omni/OmniLab.sol",
+          "line": 133,
+          "callbacks": [
+            {
+              "kind": "ERC-721 safe-transfer callback",
+              "call": "safeTransferFrom",
+              "file": "contracts/omni/OmniLab.sol",
+              "line": 149,
+              "originFunction": "liquidate",
+              "statesAccessedAfterCallback": []
+            }
+          ]
+        }
+      ],
+      "reentryCandidates": []
+    },
+    {
+      "contract": "OmniBorrowerStudent",
+      "file": "contracts/omni/OmniLab.sol",
+      "callbackFunctions": [],
+      "reentryCandidates": []
+    },
+    {
+      "contract": "OmniLiquidatorCallbackStudent",
+      "file": "contracts/omni/OmniLab.sol",
+      "callbackFunctions": [],
+      "reentryCandidates": []
+    },
+    {
+      "contract": "RevestToyBase",
+      "file": "contracts/revest/RevestLab.sol",
+      "callbackFunctions": [],
+      "reentryCandidates": []
+    },
+    {
+      "contract": "RevestVulnerable",
+      "file": "contracts/revest/RevestLab.sol",
+      "callbackFunctions": [
+        {
+          "function": "createSeries",
+          "signature": "createSeries(uint256,uint256,address)",
+          "file": "contracts/revest/RevestLab.sol",
+          "line": 61,
+          "callbacks": [
+            {
+              "kind": "ERC-1155 mint callback",
+              "call": "mint",
+              "file": "contracts/revest/RevestLab.sol",
+              "line": 71,
+              "originFunction": "createSeries",
+              "statesAccessedAfterCallback": [
+                "nextId"
+              ]
+            }
+          ]
+        },
+        {
+          "function": "depositAdditionalToFNFT",
+          "signature": "depositAdditionalToFNFT(uint256,uint256,uint256,address)",
+          "file": "contracts/revest/RevestLab.sol",
+          "line": 78,
+          "callbacks": [
+            {
+              "kind": "ERC-1155 mint callback",
+              "call": "mint",
+              "file": "contracts/revest/RevestLab.sol",
+              "line": 91,
+              "originFunction": "depositAdditionalToFNFT",
+              "statesAccessedAfterCallback": [
+                "nextId"
+              ]
+            }
+          ]
+        }
+      ],
+      "reentryCandidates": [
+        {
+          "outerFunction": "createSeries",
+          "callback": "ERC-1155 mint callback",
+          "callbackLine": 71,
+          "candidateFunction": "createSeries",
+          "candidateLine": 61,
+          "pattern": "same-function",
+          "severity": "medium",
+          "sharedStates": [
+            "nextId",
+            "series"
+          ],
+          "statesUsedAfterCallback": [
+            "nextId"
+          ],
+          "guard": "未观察到共享 nonReentrant 修饰器",
+          "rationale": "createSeries 可写入 nextId；createSeries 会在回调后继续访问这些状态。"
+        },
+        {
+          "outerFunction": "createSeries",
+          "callback": "ERC-1155 mint callback",
+          "callbackLine": 71,
+          "candidateFunction": "depositAdditionalToFNFT",
+          "candidateLine": 78,
+          "pattern": "cross-function",
+          "severity": "medium",
+          "sharedStates": [
+            "nextId",
+            "series"
+          ],
+          "statesUsedAfterCallback": [
+            "nextId"
+          ],
+          "guard": "未观察到共享 nonReentrant 修饰器",
+          "rationale": "depositAdditionalToFNFT 可写入 nextId；createSeries 会在回调后继续访问这些状态。"
+        },
+        {
+          "outerFunction": "depositAdditionalToFNFT",
+          "callback": "ERC-1155 mint callback",
+          "callbackLine": 91,
+          "candidateFunction": "createSeries",
+          "candidateLine": 61,
+          "pattern": "cross-function",
+          "severity": "medium",
+          "sharedStates": [
+            "nextId",
+            "series"
+          ],
+          "statesUsedAfterCallback": [
+            "nextId"
+          ],
+          "guard": "未观察到共享 nonReentrant 修饰器",
+          "rationale": "createSeries 可写入 nextId；depositAdditionalToFNFT 会在回调后继续访问这些状态。"
+        },
+        {
+          "outerFunction": "depositAdditionalToFNFT",
+          "callback": "ERC-1155 mint callback",
+          "callbackLine": 91,
+          "candidateFunction": "depositAdditionalToFNFT",
+          "candidateLine": 78,
+          "pattern": "same-function",
+          "severity": "medium",
+          "sharedStates": [
+            "nextId",
+            "series"
+          ],
+          "statesUsedAfterCallback": [
+            "nextId"
+          ],
+          "guard": "未观察到共享 nonReentrant 修饰器",
+          "rationale": "depositAdditionalToFNFT 可写入 nextId；depositAdditionalToFNFT 会在回调后继续访问这些状态。"
+        }
+      ]
+    },
+    {
+      "contract": "RevestFixed",
+      "file": "contracts/revest/RevestLab.sol",
+      "callbackFunctions": [
+        {
+          "function": "createSeries",
+          "signature": "createSeries(uint256,uint256,address)",
+          "file": "contracts/revest/RevestLab.sol",
+          "line": 102,
+          "callbacks": [
+            {
+              "kind": "ERC-1155 mint callback",
+              "call": "mint",
+              "file": "contracts/revest/RevestLab.sol",
+              "line": 111,
+              "originFunction": "createSeries",
+              "statesAccessedAfterCallback": []
+            }
+          ]
+        },
+        {
+          "function": "depositAdditionalToFNFT",
+          "signature": "depositAdditionalToFNFT(uint256,uint256,uint256,address)",
+          "file": "contracts/revest/RevestLab.sol",
+          "line": 114,
+          "callbacks": [
+            {
+              "kind": "ERC-1155 mint callback",
+              "call": "mint",
+              "file": "contracts/revest/RevestLab.sol",
+              "line": 126,
+              "originFunction": "depositAdditionalToFNFT",
+              "statesAccessedAfterCallback": []
+            }
+          ]
+        }
+      ],
+      "reentryCandidates": []
+    },
+    {
+      "contract": "RevestCallbackStudent",
+      "file": "contracts/revest/RevestLab.sol",
+      "callbackFunctions": [],
+      "reentryCandidates": []
+    }
+  ]
+}

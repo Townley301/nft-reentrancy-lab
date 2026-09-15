@@ -31,7 +31,45 @@ pnpm install
 pnpm test
 pnpm demo
 pnpm visual
+pnpm analyze
+pnpm verify:v2
+pnpm verify:rules
 ```
+
+### 由研究者业务规则生成回调测试
+
+研究者只需按照 `rules/callback-rules.schema.json` 编辑 `rules/callback-rules.json`，为已审查的本地模板填写业务不变量、少量有上限的参数组合，以及漏洞版/修复版的预期（`violate` 或 `preserve`）。随后运行：
+
+```bash
+pnpm verify:rules
+```
+
+该命令会严格校验规则、生成 `test/generated/callback-rules.test.ts`、在 Hardhat 临时内存链上执行回调场景，并输出：
+
+- `analysis/business-rule-report.json`：供工具读取的逐场景结果；
+- `analysis/business-rule-report.md`：供研究者阅读的预期/观察对照表。
+
+规则格式只允许项目内已有的三个回调模板，不接受任意代码、RPC、网络、钱包、账户、地址、助记词或私钥字段。参数数量和值域都有上限。完整的流程差距和仍保留的限制见 `analysis/workflow-gap-report.md`。
+
+### 第二版：共享状态防御分析器
+
+`pnpm analyze` 只读取本项目的 Solidity 编译 AST，不连接任何 RPC、钱包或真实资产。它会：
+
+1. 定位 ERC-721 / ERC-1155 的安全转移、铸造和接收回调点；
+2. 计算外层函数与其他公开函数共同读写的状态；
+3. 仅当某个公开函数能修改“回调后仍会被外层函数访问”的状态时，将它列为重入审查候选；
+4. 标注同函数/跨函数模式、共享状态、源码位置和共同重入锁；
+5. 生成 `analysis/shared-state-report.json` 和 `analysis/shared-state-report.md`。
+
+候选项是静态审查提示，不等于已经证明可利用；仍需检查权限、参数约束和完整业务流程。
+
+`pnpm verify:v2` 会先生成分析报告，再在 Hardhat 临时内存链中执行原有案例和第二版业务不变量测试。参数测试保持为少量确定性组合：OMNI 使用 3 个中高债务值，Revest 使用 3 组有上限的数量/存款组合。测试验证：
+
+- 同一地址最多使用一次铸造资格；
+- 未偿债务不得超过剩余抵押能力；
+- FNFT 的最终支出不得超过调用者实际提供的价值。
+
+这里的漏洞版断言用于确认测试确实能发现不变量被破坏；修复版必须在同样参数下保持不变量。
 
 ### 用图形页面逐步观察
 

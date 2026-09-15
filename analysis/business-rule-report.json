@@ -1,0 +1,264 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-15T07:30:54.426Z",
+  "source": "rules/callback-rules.json",
+  "digest": "fc3eac6c9cd26a7f",
+  "safetyBoundary": {
+    "chain": "ephemeral-hardhat",
+    "rpcCalls": false,
+    "privateKeys": false,
+    "realAssets": false
+  },
+  "summary": {
+    "rules": 3,
+    "scenarios": 14,
+    "passed": 14,
+    "failed": 0
+  },
+  "observations": [
+    {
+      "ruleId": "one-time-mint-right",
+      "template": "one-time-mint",
+      "variant": "vulnerable",
+      "parameters": {},
+      "expected": "violate",
+      "observed": "violate",
+      "passed": true,
+      "evidence": {
+        "finalNftBalance": 2,
+        "callbacks": 2,
+        "reentrySucceeded": true
+      }
+    },
+    {
+      "ruleId": "one-time-mint-right",
+      "template": "one-time-mint",
+      "variant": "fixed",
+      "parameters": {},
+      "expected": "preserve",
+      "observed": "preserve",
+      "passed": true,
+      "evidence": {
+        "finalNftBalance": 1,
+        "callbacks": 1,
+        "reentrySucceeded": false
+      }
+    },
+    {
+      "ruleId": "collateral-covers-debt",
+      "template": "collateral-coverage",
+      "variant": "vulnerable",
+      "parameters": {
+        "borrowAmount": 11
+      },
+      "expected": "violate",
+      "observed": "violate",
+      "passed": true,
+      "evidence": {
+        "withdrawalRejected": false,
+        "remainingCollateral": 0,
+        "remainingDebt": 10,
+        "callbacks": 2
+      }
+    },
+    {
+      "ruleId": "collateral-covers-debt",
+      "template": "collateral-coverage",
+      "variant": "fixed",
+      "parameters": {
+        "borrowAmount": 11
+      },
+      "expected": "preserve",
+      "observed": "preserve",
+      "passed": true,
+      "evidence": {
+        "withdrawalRejected": true,
+        "remainingCollateral": 2,
+        "remainingDebt": 11,
+        "callbacks": 0
+      }
+    },
+    {
+      "ruleId": "collateral-covers-debt",
+      "template": "collateral-coverage",
+      "variant": "vulnerable",
+      "parameters": {
+        "borrowAmount": 15
+      },
+      "expected": "violate",
+      "observed": "violate",
+      "passed": true,
+      "evidence": {
+        "withdrawalRejected": false,
+        "remainingCollateral": 0,
+        "remainingDebt": 14,
+        "callbacks": 2
+      }
+    },
+    {
+      "ruleId": "collateral-covers-debt",
+      "template": "collateral-coverage",
+      "variant": "fixed",
+      "parameters": {
+        "borrowAmount": 15
+      },
+      "expected": "preserve",
+      "observed": "preserve",
+      "passed": true,
+      "evidence": {
+        "withdrawalRejected": true,
+        "remainingCollateral": 2,
+        "remainingDebt": 15,
+        "callbacks": 0
+      }
+    },
+    {
+      "ruleId": "collateral-covers-debt",
+      "template": "collateral-coverage",
+      "variant": "vulnerable",
+      "parameters": {
+        "borrowAmount": 19
+      },
+      "expected": "violate",
+      "observed": "violate",
+      "passed": true,
+      "evidence": {
+        "withdrawalRejected": false,
+        "remainingCollateral": 0,
+        "remainingDebt": 18,
+        "callbacks": 2
+      }
+    },
+    {
+      "ruleId": "collateral-covers-debt",
+      "template": "collateral-coverage",
+      "variant": "fixed",
+      "parameters": {
+        "borrowAmount": 19
+      },
+      "expected": "preserve",
+      "observed": "preserve",
+      "passed": true,
+      "evidence": {
+        "withdrawalRejected": true,
+        "remainingCollateral": 2,
+        "remainingDebt": 19,
+        "callbacks": 0
+      }
+    },
+    {
+      "ruleId": "payout-within-funded-value",
+      "template": "funded-value",
+      "variant": "vulnerable",
+      "parameters": {
+        "outerQuantity": 3,
+        "depositPerUnit": 1,
+        "additionalQuantity": 1
+      },
+      "expected": "violate",
+      "observed": "violate",
+      "passed": true,
+      "evidence": {
+        "fundedValue": 1,
+        "finalBalance": 4,
+        "outerSeriesId": 2,
+        "callbackSeriesId": 2
+      }
+    },
+    {
+      "ruleId": "payout-within-funded-value",
+      "template": "funded-value",
+      "variant": "fixed",
+      "parameters": {
+        "outerQuantity": 3,
+        "depositPerUnit": 1,
+        "additionalQuantity": 1
+      },
+      "expected": "preserve",
+      "observed": "preserve",
+      "passed": true,
+      "evidence": {
+        "fundedValue": 1,
+        "finalBalance": 1,
+        "outerSeriesId": 2,
+        "callbackSeriesId": 3
+      }
+    },
+    {
+      "ruleId": "payout-within-funded-value",
+      "template": "funded-value",
+      "variant": "vulnerable",
+      "parameters": {
+        "outerQuantity": 5,
+        "depositPerUnit": 2,
+        "additionalQuantity": 2
+      },
+      "expected": "violate",
+      "observed": "violate",
+      "passed": true,
+      "evidence": {
+        "fundedValue": 4,
+        "finalBalance": 14,
+        "outerSeriesId": 2,
+        "callbackSeriesId": 2
+      }
+    },
+    {
+      "ruleId": "payout-within-funded-value",
+      "template": "funded-value",
+      "variant": "fixed",
+      "parameters": {
+        "outerQuantity": 5,
+        "depositPerUnit": 2,
+        "additionalQuantity": 2
+      },
+      "expected": "preserve",
+      "observed": "preserve",
+      "passed": true,
+      "evidence": {
+        "fundedValue": 4,
+        "finalBalance": 4,
+        "outerSeriesId": 2,
+        "callbackSeriesId": 3
+      }
+    },
+    {
+      "ruleId": "payout-within-funded-value",
+      "template": "funded-value",
+      "variant": "vulnerable",
+      "parameters": {
+        "outerQuantity": 8,
+        "depositPerUnit": 3,
+        "additionalQuantity": 2
+      },
+      "expected": "violate",
+      "observed": "violate",
+      "passed": true,
+      "evidence": {
+        "fundedValue": 6,
+        "finalBalance": 30,
+        "outerSeriesId": 2,
+        "callbackSeriesId": 2
+      }
+    },
+    {
+      "ruleId": "payout-within-funded-value",
+      "template": "funded-value",
+      "variant": "fixed",
+      "parameters": {
+        "outerQuantity": 8,
+        "depositPerUnit": 3,
+        "additionalQuantity": 2
+      },
+      "expected": "preserve",
+      "observed": "preserve",
+      "passed": true,
+      "evidence": {
+        "fundedValue": 6,
+        "finalBalance": 6,
+        "outerSeriesId": 2,
+        "callbackSeriesId": 3
+      }
+    }
+  ]
+}

@@ -7,6 +7,11 @@
   "scripts": {
     "compile": "hardhat compile",
     "test": "hardhat test nodejs",
+    "analyze": "hardhat compile --force && node scripts/analyze-shared-state.mjs",
+    "generate:rules": "node scripts/generate-callback-tests.mjs",
+    "verify:rules": "node scripts/generate-callback-tests.mjs && hardhat test nodejs test/generated/callback-rules.test.ts test/callback-rule-generator.test.mjs",
+    "test:v2": "hardhat test nodejs",
+    "verify:v2": "hardhat compile --force && node scripts/analyze-shared-state.mjs && hardhat test nodejs",
     "demo": "hardhat run scripts/run-all.ts",
     "visual": "hardhat run scripts/generate-visual-report.ts",
     "node": "hardhat node"

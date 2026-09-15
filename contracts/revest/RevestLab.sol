@@ -138,6 +138,8 @@ contract RevestCallbackStudent is IERC1155Receiver {
     bool public armed;
     bool public reentrySucceeded;
     uint256 public callbacks;
+    uint256 public callbackDepositPerUnit;
+    uint256 public callbackQuantity;
 
     event CallbackObserved(uint256 receivedId, uint256 amount, bool attemptedAdditionalDeposit);
 
@@ -148,14 +150,37 @@ contract RevestCallbackStudent is IERC1155Receiver {
     }
 
     function runLesson() external {
+        _runLesson(5, 1, 1);
+    }
+
+    /// @notice Bounded local test entry used to check the business invariant
+    /// across a few deterministic parameter combinations.
+    function runLessonWithParameters(
+        uint256 outerQuantity,
+        uint256 depositPerUnit,
+        uint256 additionalQuantity
+    ) external {
+        require(outerQuantity > 0 && outerQuantity <= 10, "outer quantity out of lab range");
+        require(depositPerUnit > 0 && depositPerUnit <= 5, "deposit out of lab range");
+        require(additionalQuantity > 0 && additionalQuantity <= 3, "additional quantity out of lab range");
+        _runLesson(outerQuantity, depositPerUnit, additionalQuantity);
+    }
+
+    function _runLesson(
+        uint256 outerQuantity,
+        uint256 depositPerUnit,
+        uint256 additionalQuantity
+    ) internal {
         asset.approve(address(protocol), type(uint256).max);
         fnft.setApprovalForAll(address(protocol), true);
 
         // A small base series makes depositAdditionalToFNFT available.
         baseId = protocol.createSeries(2, 0, address(this));
 
+        callbackDepositPerUnit = depositPerUnit;
+        callbackQuantity = additionalQuantity;
         armed = true;
-        createdId = protocol.createSeries(5, 0, address(this));
+        createdId = protocol.createSeries(outerQuantity, 0, address(this));
         armed = false;
 
         uint256 createdBalance = fnft.balanceOf(address(this), createdId);
@@ -185,7 +210,12 @@ contract RevestCallbackStudent is IERC1155Receiver {
 
         if (shouldTry) {
             armed = false;
-            try protocol.depositAdditionalToFNFT(baseId, 1, 1, address(this)) returns (
+            try protocol.depositAdditionalToFNFT(
+                baseId,
+                callbackDepositPerUnit,
+                callbackQuantity,
+                address(this)
+            ) returns (
                 uint256 newId
             ) {
                 additionalId = newId;

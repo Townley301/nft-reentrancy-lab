@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NFT 回调重入 · 本地交易观察器</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0b1020;
+      color: #e8edf8;
+      --panel: #121b2d;
+      --panel-2: #182338;
+      --line: #2a3850;
+      --muted: #a9b8cc;
+      --accent: #7adac7;
+      --bad: #f3a2a2;
+      --good: #a9dfb3;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; }
+    button { font: inherit; cursor: pointer; }
+    button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 22px 60px; }
+    header { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; }
+    h1 { margin: 0 0 7px; font-size: clamp(24px, 4vw, 34px); font-weight: 650; letter-spacing: -.02em; }
+    h2 { margin: 0; font-size: 21px; font-weight: 620; }
+    p { margin: 0; line-height: 1.62; }
+    .subtitle, .footnote, .meta { color: var(--muted); }
+    .subtitle { max-width: 700px; }
+    .local-pill { flex: none; border: 1px solid #315e59; color: var(--accent); border-radius: 999px; padding: 7px 12px; font-size: 13px; }
+    .topbar { margin-top: 26px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 18px; align-items: end; }
+    .group-label { display: block; color: var(--muted); font-size: 13px; margin-bottom: 9px; }
+    .tabs, .versions, .transport { display: flex; flex-wrap: wrap; gap: 7px; }
+    .tabs button, .versions button, .transport button {
+      border: 1px solid var(--line); border-radius: 10px; color: #dce5f4;
+      background: var(--panel); padding: 10px 14px; min-height: 42px;
+    }
+    .tabs button[aria-pressed="true"], .versions button[aria-pressed="true"] {
+      color: #0b1820; background: var(--accent); border-color: var(--accent); font-weight: 650;
+    }
+    .versions button.bad[aria-pressed="true"] { background: var(--bad); border-color: var(--bad); }
+    .versions button.good[aria-pressed="true"] { background: var(--good); border-color: var(--good); }
+    .overview { margin-top: 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+    .overview-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 10px; }
+    .overview .summary { margin-top: 8px; color: var(--muted); }
+    .tx { color: var(--muted); font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+    .result { margin-top: 16px; padding: 12px 14px; background: var(--panel-2); border-left: 4px solid var(--bad); border-radius: 7px; }
+    .result.good { border-left-color: var(--good); }
+    .result strong { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+    .progress-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 27px 0 10px; }
+    .progress-row .meta { font-size: 13px; }
+    .progress { height: 7px; background: var(--line); border-radius: 99px; overflow: hidden; }
+    .progress > div { height: 100%; width: 0; background: var(--accent); transition: width .22s ease; }
+    .actors { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 24px 0 8px; }
+    .actor { position: relative; min-height: 88px; padding: 15px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 13px; text-align: center; transition: border-color .2s, background .2s, transform .2s; }
+    .actor:not(:last-child)::after { content: "→"; position: absolute; right: -14px; top: 30px; z-index: 2; color: var(--muted); font-size: 21px; }
+    .actor.active { background: #17403e; border-color: var(--accent); transform: translateY(-3px); }
+    .actor .icon { display: block; font-size: 23px; margin-bottom: 5px; }
+    .actor .name { font-size: 14px; font-weight: 630; }
+    .reentry-line { text-align: right; min-height: 24px; color: var(--bad); font-size: 13px; margin-bottom: 11px; opacity: 0; transition: opacity .2s; }
+    .reentry-line.visible { opacity: 1; }
+    .main-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(260px, .8fr); gap: 16px; align-items: start; }
+    .focus-stack { display: grid; gap: 16px; min-width: 0; }
+    .current, .timeline, .code-panel { border: 1px solid var(--line); background: var(--panel); border-radius: 16px; }
+    .current { padding: 22px; min-height: 205px; }
+    .eyebrow { color: var(--accent); font-size: 13px; font-weight: 650; letter-spacing: .02em; }
+    .current h2 { margin: 10px 0; }
+    .current .detail { color: #c9d6e7; min-height: 50px; }
+    .metrics { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 21px; }
+    .metric { border: 1px solid var(--line); background: var(--panel-2); border-radius: 9px; padding: 9px 11px; min-width: 90px; }
+    .metric .label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .metric .value { display: block; font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; }
+    .call-path { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 7px; align-items: center; color: var(--muted); font-size: 13px; }
+    .call-path .crumb { background: var(--panel-2); border-radius: 6px; padding: 4px 7px; }
+    .call-path .crumb:last-child { color: var(--accent); }
+    .call-path .arrow { color: #8096ae; }
+    .code-panel { padding: 18px 0 0; overflow: hidden; }
+    .code-header { padding: 0 18px 13px; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .code-header h2 { font-size: 16px; }
+    .code-location { color: var(--muted); font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+    .code-symbol { display: block; padding: 0 18px 12px; color: var(--accent); font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+    .code-window { overflow-x: auto; background: #0d1524; padding: 10px 0; }
+    .code-line { display: flex; width: max-content; min-width: 100%; font: 12px/1.58 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; color: #cbd7e9; }
+    .code-line.focus { background: #254b4c; color: #f0fff9; }
+    .line-number { display: inline-block; flex: none; width: 45px; padding: 0 9px 0 5px; text-align: right; color: #8298b0; user-select: none; }
+    .code-line.focus .line-number { color: var(--accent); font-weight: 700; }
+    .code-line code { padding-right: 16px; font: inherit; }
+    .code-empty { padding: 18px; color: var(--muted); line-height: 1.55; }
+    .timeline { padding: 18px; }
+    .timeline h2 { font-size: 16px; margin-bottom: 13px; }
+    .timeline-list { display: grid; gap: 6px; }
+    .timeline button { width: 100%; text-align: left; padding: 8px 10px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--muted); display: flex; gap: 10px; align-items: start; }
+    .timeline button:hover { background: var(--panel-2); color: #e8edf8; }
+    .timeline button[aria-current="step"] { background: #17403e; border-color: #366d65; color: #fff; }
+    .timeline .number { flex: none; font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); }
+    .timeline .label { font-size: 13px; line-height: 1.35; }
+    .transport { margin-top: 14px; align-items: center; }
+    .transport button { min-width: 86px; }
+    .transport button:disabled { opacity: .45; cursor: default; }
+    .transport .hint { color: var(--muted); font-size: 12px; margin-left: auto; }
+    .footnote { margin-top: 28px; font-size: 13px; }
+    .footnote a { color: var(--accent); }
+    @media (max-width: 760px) {
+      .main-grid { grid-template-columns: 1fr; }
+      .actors { gap: 6px; }
+      .actor { min-height: 84px; padding: 12px 5px; }
+      .actor:not(:last-child)::after { right: -8px; font-size: 16px; }
+      .actor .name { font-size: 12px; }
+    }
+    @media (max-width: 500px) {
+      header { display: block; }
+      .local-pill { display: inline-block; margin-top: 12px; }
+      .wrap { padding: 20px 14px 40px; }
+      .tabs, .versions { width: 100%; }
+      .tabs button { flex: 1; padding: 9px 7px; font-size: 13px; }
+      .versions button { flex: 1; }
+      .actor .icon { font-size: 18px; }
+      .transport .hint { width: 100%; margin-left: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>NFT 回调重入 · 本地交易观察器</h1>
+        <p class="subtitle">点选案例和步骤，左侧显示对应源码与调用路径，看 NFT 回调怎样进入另一段代码、改变状态，再返回原函数。</p>
+      </div>
+      <span class="local-pill">● 仅本地虚拟资产</span>
+    </header>
+
+    <div class="topbar">
+      <div>
+        <span class="group-label">选择案例</span>
+        <div class="tabs" id="case-tabs" role="group" aria-label="选择案例">
+          <button type="button" data-case="hypebears">1 · HypeBears</button>
+          <button type="button" data-case="omni">2 · OMNI</button>
+          <button type="button" data-case="revest">3 · Revest</button>
+        </div>
+      </div>
+      <div>
+        <span class="group-label">对比版本</span>
+        <div class="versions" id="version-tabs" role="group" aria-label="对比版本">
+          <button type="button" data-version="vulnerable" class="bad">漏洞版</button>
+          <button type="button" data-version="fixed" class="good">修复版</button>
+        </div>
+      </div>
+    </div>
+
+    <section class="overview" aria-labelledby="scenario-heading">
+      <div class="overview-head">
+        <h2 id="scenario-heading"></h2>
+        <span class="tx" id="tx-hash"></span>
+      </div>
+      <p class="summary" id="intro"></p>
+      <div class="result" id="result-box"><strong>最终结果</strong><span id="outcome"></span></div>
+    </section>
+
+    <div class="progress-row">
+      <strong id="step-count">步骤 1 / 1</strong>
+      <span class="meta" id="step-source"></span>
+    </div>
+    <div class="progress" role="progressbar" aria-label="流程进度" aria-valuemin="1" id="progress"><div id="progress-fill"></div></div>
+
+    <div class="transport" role="group" aria-label="步骤控制">
+      <button type="button" id="previous">← 上一步</button>
+      <button type="button" id="play">▶ 自动播放</button>
+      <button type="button" id="next">下一步 →</button>
+      <span class="hint">也可点击右侧任一事件跳转</span>
+    </div>
+
+    <div class="actors" aria-label="调用过程中的角色">
+      <div class="actor" data-actor="student"><span class="icon" aria-hidden="true">👤</span><span class="name">发起者</span></div>
+      <div class="actor" data-actor="protocol"><span class="icon" aria-hidden="true">▣</span><span class="name">协议合约</span></div>
+      <div class="actor" data-actor="nft"><span class="icon" aria-hidden="true">◇</span><span class="name">NFT 合约</span></div>
+      <div class="actor" data-actor="receiver"><span class="icon" aria-hidden="true">↪</span><span class="name">接收回调</span></div>
+    </div>
+    <div class="reentry-line" id="reentry-line" aria-hidden="true">↶ 回调期间再次进入协议合约</div>
+
+    <div class="main-grid">
+      <div class="focus-stack">
+        <section class="current" aria-live="polite" aria-atomic="true">
+          <span class="eyebrow" id="current-category"></span>
+          <h2 id="current-title"></h2>
+          <p class="detail" id="current-detail"></p>
+          <div class="metrics" id="metrics"></div>
+          <div class="call-path" id="call-path" aria-label="教学标注的当前调用路径"></div>
+        </section>
+        <section class="code-panel" aria-labelledby="code-heading">
+          <div class="code-header">
+            <h2 id="code-heading">这一步对应的代码</h2>
+            <span class="code-location" id="code-location"></span>
+          </div>
+          <span class="code-symbol" id="code-symbol"></span>
+          <div class="code-window" id="code-window" aria-label="带行号的 Solidity 代码片段"></div>
+        </section>
+      </div>
+      <section class="timeline" aria-labelledby="timeline-heading">
+        <h2 id="timeline-heading">交易中的事件顺序</h2>
+        <div class="timeline-list" id="timeline-list"></div>
+      </section>
+    </div>
+
+    <p class="footnote">事件顺序来自本地交易收据；源码片段从当前项目文件生成，绿色高亮行对应发出事件的位置或关键判断。调用路径根据教学合约结构标注，并非逐条 EVM 指令追踪。回滚交易没有事件日志，只显示脚本观察。案例来源见 <a href="README.md">README</a>。</p>
+  </div>
+
+  <script>
+    const payload = /* __LAB_DATA__ */ null;
+    const names = { hypebears: "HypeBears · 同函数重入", omni: "OMNI · 跨函数重入", revest: "Revest · ERC-1155 编号冲突" };
+    const actorNames = { student: "发起者", protocol: "协议合约", nft: "NFT 合约", receiver: "接收回调" };
+    let caseId = "hypebears";
+    let variant = "vulnerable";
+    let index = 0;
+    let timer = null;
+
+    const byId = (id) => document.getElementById(id);
+    const scenario = () => payload.scenarios.find((item) => item.caseId === caseId && item.variant === variant);
+
+    function stopPlayback() {
+      if (timer !== null) clearInterval(timer);
+      timer = null;
+      byId("play").textContent = "▶ 自动播放";
+    }
+
+    function setCase(nextCase) {
+      stopPlayback();
+      caseId = nextCase;
+      index = 0;
+      render();
+    }
+
+    function setVariant(nextVariant) {
+      stopPlayback();
+      variant = nextVariant;
+      index = 0;
+      render();
+    }
+
+    function setIndex(nextIndex) {
+      const current = scenario();
+      index = Math.max(0, Math.min(current.steps.length - 1, nextIndex));
+      render();
+    }
+
+    function renderTimeline(current) {
+      const list = byId("timeline-list");
+      list.replaceChildren();
+      current.steps.forEach((step, position) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        if (position === index) button.setAttribute("aria-current", "step");
+        button.setAttribute("aria-label", `第 ${position + 1} 步：${step.title}`);
+        const number = document.createElement("span");
+        number.className = "number";
+        number.textContent = String(position + 1).padStart(2, "0");
+        const label = document.createElement("span");
+        label.className = "label";
+        label.textContent = step.title;
+        button.append(number, label);
+        button.addEventListener("click", () => { stopPlayback(); setIndex(position); });
+        list.append(button);
+      });
+    }
+
+    function renderCode(step) {
+      const code = step.code;
+      const window = byId("code-window");
+      window.replaceChildren();
+      if (!code) {
+        byId("code-location").textContent = "无链上源码行";
+        byId("code-symbol").textContent = "交易前后读取状态 / 回滚结果";
+        const empty = document.createElement("p");
+        empty.className = "code-empty";
+        empty.textContent = "这一步是实验脚本的观察，不对应交易内部某一条成功执行的 Solidity 指令。";
+        window.append(empty);
+        return;
+      }
+      byId("code-location").textContent = `${code.path}:${code.focusLine}`;
+      byId("code-symbol").textContent = code.symbol;
+      for (const line of code.lines) {
+        const row = document.createElement("div");
+        row.className = `code-line${line.number === code.focusLine ? " focus" : ""}`;
+        const number = document.createElement("span");
+        number.className = "line-number";
+        number.textContent = String(line.number);
+        const source = document.createElement("code");
+        source.textContent = line.text || " ";
+        row.append(number, source);
+        window.append(row);
+      }
+      window.scrollLeft = 0;
+    }
+
+    function renderCallPath(step) {
+      const path = byId("call-path");
+      path.replaceChildren();
+      for (const [position, label] of (step.callPath ?? []).entries()) {
+        if (position > 0) {
+          const arrow = document.createElement("span");
+          arrow.className = "arrow";
+          arrow.textContent = "→";
+          path.append(arrow);
+        }
+        const crumb = document.createElement("span");
+        crumb.className = "crumb";
+        crumb.textContent = label;
+        path.append(crumb);
+      }
+    }
+
+    function render() {
+      const current = scenario();
+      const step = current.steps[index];
+
+      document.querySelectorAll("[data-case]").forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.dataset.case === caseId));
+      });
+      document.querySelectorAll("[data-version]").forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.dataset.version === variant));
+      });
+
+      byId("scenario-heading").textContent = names[caseId];
+      byId("tx-hash").textContent = current.txHash ? `本地交易 ${current.txHash.slice(0, 10)}…${current.txHash.slice(-6)}` : "交易回滚 · 无收据事件";
+      byId("intro").textContent = current.intro;
+      byId("outcome").textContent = current.outcome;
+      byId("result-box").classList.toggle("good", variant === "fixed");
+
+      byId("step-count").textContent = `步骤 ${index + 1} / ${current.steps.length}`;
+      byId("step-source").textContent = step.source;
+      byId("progress").setAttribute("aria-valuenow", String(index + 1));
+      byId("progress").setAttribute("aria-valuemax", String(current.steps.length));
+      byId("progress-fill").style.width = `${((index + 1) / current.steps.length) * 100}%`;
+
+      document.querySelectorAll(".actor").forEach((actor) => {
+        actor.classList.toggle("active", actor.dataset.actor === step.actor);
+      });
+      byId("reentry-line").classList.toggle("visible", step.actor === "receiver" && step.title.includes("进入") || step.title.includes("再次调用"));
+
+      byId("current-category").textContent = `${actorNames[step.actor]} · ${step.source}`;
+      byId("current-title").textContent = step.title;
+      byId("current-detail").textContent = step.detail;
+      const metrics = byId("metrics");
+      metrics.replaceChildren();
+      for (const [label, value] of Object.entries(step.metrics ?? {})) {
+        const metric = document.createElement("div");
+        metric.className = "metric";
+        const metricLabel = document.createElement("span");
+        metricLabel.className = "label";
+        metricLabel.textContent = label;
+        const metricValue = document.createElement("span");
+        metricValue.className = "value";
+        metricValue.textContent = value;
+        metric.append(metricLabel, metricValue);
+        metrics.append(metric);
+      }
+      renderCallPath(step);
+      renderCode(step);
+
+      byId("previous").disabled = index === 0;
+      byId("next").disabled = index === current.steps.length - 1;
+      renderTimeline(current);
+    }
+
+    document.querySelectorAll("[data-case]").forEach((button) => {
+      button.addEventListener("click", () => setCase(button.dataset.case));
+    });
+    document.querySelectorAll("[data-version]").forEach((button) => {
+      button.addEventListener("click", () => setVariant(button.dataset.version));
+    });
+    byId("previous").addEventListener("click", () => { stopPlayback(); setIndex(index - 1); });
+    byId("next").addEventListener("click", () => { stopPlayback(); setIndex(index + 1); });
+    byId("play").addEventListener("click", () => {
+      if (timer !== null) { stopPlayback(); return; }
+      if (index === scenario().steps.length - 1) index = 0;
+      render();
+      byId("play").textContent = "Ⅱ 暂停";
+      timer = setInterval(() => {
+        if (index >= scenario().steps.length - 1) { stopPlayback(); return; }
+        setIndex(index + 1);
+      }, 1650);
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowRight") { stopPlayback(); setIndex(index + 1); }
+      if (event.key === "ArrowLeft") { stopPlayback(); setIndex(index - 1); }
+    });
+    render();
+  </script>
+</body>
+</html>
