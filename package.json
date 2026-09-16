@@ -14,7 +14,8 @@
     "verify:v2": "hardhat compile --force && node scripts/analyze-shared-state.mjs && hardhat test nodejs",
     "demo": "hardhat run scripts/run-all.ts",
     "visual": "hardhat run scripts/generate-visual-report.ts",
-    "node": "hardhat node"
+    "node": "hardhat node",
+    "deploy:sepolia:fixed": "hardhat run scripts/deploy-fixed-sepolia.ts --network sepolia"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox-viem": "5.0.7",
