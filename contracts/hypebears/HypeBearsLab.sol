@@ -54,13 +54,26 @@ contract HypeBearsFixed is HypeBearsToyBase {
 
 interface IHypeBearsToy {
     function mintNFT() external;
+    function addressMinted(address account) external view returns (bool);
 }
 
+/// @notice Lab demonstrator / teaching receiver. Reenters once only while armed.
+/// @dev Not an exploit playbook — instrumentation for classroom assertions.
 contract HypeBearsCallbackStudent is IERC721Receiver {
     IHypeBearsToy public immutable target;
     bool public armed;
     bool public reentrySucceeded;
     uint256 public callbacks;
+
+    /// @dev Snapshot of app ledger during the first receiver hook (learning point a).
+    bool public addressMintedDuringFirstCallback;
+    bool public recordedFirstCallbackFlag;
+
+    /// @dev msg.sender inside onERC721Received — must be the NFT contract (learning point b).
+    address public msgSenderDuringCallback;
+
+    /// @dev `operator` arg of onERC721Received — here, who called mintNFT / _safeMint.
+    address public operatorDuringCallback;
 
     event CallbackObserved(uint256 callbackNumber, bool attemptedReentry);
 
@@ -75,7 +88,7 @@ contract HypeBearsCallbackStudent is IERC721Receiver {
     }
 
     function onERC721Received(
-        address,
+        address operator,
         address,
         uint256,
         bytes calldata
@@ -83,6 +96,14 @@ contract HypeBearsCallbackStudent is IERC721Receiver {
         callbacks += 1;
         bool shouldTry = armed && callbacks == 1;
         emit CallbackObserved(callbacks, shouldTry);
+
+        if (callbacks == 1 && !recordedFirstCallbackFlag) {
+            // Token ledger is already updated; app flag may or may not be.
+            addressMintedDuringFirstCallback = target.addressMinted(address(this));
+            recordedFirstCallbackFlag = true;
+            msgSenderDuringCallback = msg.sender;
+            operatorDuringCallback = operator;
+        }
 
         if (shouldTry) {
             try target.mintNFT() {
