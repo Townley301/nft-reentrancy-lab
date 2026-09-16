@@ -1,4 +1,4 @@
-# NFT Callback Reentrancy Local Lab
+﻿# NFT Callback Reentrancy Local Lab
 
 一个完全在本地运行的 NFT 回调重入教学项目（HypeBears / OMNI / Revest 最小化模拟）。
 
@@ -59,3 +59,6 @@ test/reentrancy-lab.ts
 ## 许可
 
 仅用于本地研究、课堂演示、代码审计训练和防御测试。请勿将 Vulnerable 简化合约部署到公开网络或用于真实资产。
+
+- [docs/LIMITATIONS-AND-FUTURE.md](docs/LIMITATIONS-AND-FUTURE.md) — limitations & further improvement
+
