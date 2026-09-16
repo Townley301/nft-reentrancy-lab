@@ -1,4 +1,4 @@
-# Full Callback Flow / NFT Callback Reentrancy (HypeBears-style)
+﻿# Full Callback Flow / NFT Callback Reentrancy (HypeBears-style)
 
 > **Defensive teaching only**
 > Two ledgers, CEI ordering, teaching receiver.
@@ -89,3 +89,4 @@ Check -> addressMinted=true -> _safeMint -> reentry require fails -> balance 1
 Defensive teaching only. No exploit script / phishing / mainnet.
 
 Optional Sepolia **Fixed-only** mint (EOA - no callback window): [`docs/SEPOLIA-MINT.md`](SEPOLIA-MINT.md).
+
