@@ -1,0 +1,106 @@
+﻿%% COMP7610 Technical Report shell — Potential Security Risk in ERC-721 Smart Contract
+%% Based on IEEEtran peerreview template. Branch content: levi_dev lab docs.
+\documentclass[peerreview]{IEEEtran}
+\usepackage{cite}
+\usepackage{url}
+\usepackage[utf8]{inputenc}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{hyperref}
+
+\begin{document}
+
+\title{Potential Security Risks in ERC-721 Smart Contracts:\\
+Callback Reentrancy and Over-broad Approvals}
+
+\author{Author One, Author Two, Author Three, Yifeng Liu\\
+Department of Computer Science\\
+The University of Hong Kong\\
+COMP7610 Course Project}
+\date{\today}
+
+\maketitle
+\tableofcontents
+\listoffigures
+\listoftables
+
+\IEEEpeerreviewmaketitle
+
+\begin{abstract}
+% ~200 words. Cover: purpose; two threats (late app ledger on callback; setApprovalForAll over-breadth);
+% method (Hardhat lab + public-report review); findings (CEI; least privilege); recommendations.
+% Past tense / active voice for what was done. No exploit steps.
+\end{abstract}
+
+\section{Introduction}
+% Motivation; two threat threads; report roadmap; defensive boundary (no exploit PoC).
+
+\section{Problem Definition}
+\subsection{Callback window and the two-ledger model}
+% Nail three lines: (1) safe $\neq$ anti-reentrancy;
+% (2) token ledger (owner/balance) vs app ledger (addressMinted);
+% (3) same-tx callback window after \_safeMint.
+% Cite lab: docs/CALLBACK-FLOW.md, docs/全流程-回调重入.md.
+
+\subsection{Over-broad approvals}
+% approve vs setApprovalForAll; public reports on BAYC \#3738 as approval phishing
+% (not a BAYC contract bug; not callback reentrancy).
+
+\subsection{Shared framing, distinct bugs}
+% Handing over \emph{allowance} vs handing over \emph{control flow};
+% motto: lock state before handing over power.
+
+\section{Proposed Solutions}
+\subsection{Application-level Checks-Effects-Interactions}
+% Fixed: write addressMinted before \_safeMint; optional ReentrancyGuard as depth.
+
+\subsection{Least-privilege approvals}
+% Per-token approve; revocable operators; UI disclosure; no phishing playbook.
+
+\subsection{Lab and demo artefacts}
+% HypeBearsVulnerable / Fixed; teaching receiver; Hardhat assertions (a)(b)(c);
+% Sepolia Fixed-only page (EOA mint shows no callback window).
+
+\section{Criteria for Assessing Solutions}\label{sec:criteria}
+% Table: observability; teaching fidelity; implementation cost;
+% new attack surface; classroom demo fitness; alignment with public threats.
+
+\section{Research Methodology}
+% What we did (not findings). Literature / public postmortems;
+% local cases (HypeBears focus; OMNI/Revest briefly);
+% test design (test/hypebears-callback-flow.ts);
+% visual-report / animation; Sepolia Fixed-only scope.
+% Explicit defensive boundary: no exploit PoC; no public Vulnerable deploy; Toy assets only.
+
+\section{Analysis and Interpretation}
+\subsection{Callback results against the criteria}
+% Vulnerable vs Fixed (balance 2 vs 1; flag during first callback).
+% Table: permission handover vs control-flow handover.
+
+\subsection{Approval thread against the criteria}
+% Public-report mechanism alignment; contrast with callback line.
+
+\subsection{Limitations}
+% Toy simplification; uneven case depth; EOA demo boundary.
+% Point to docs/LIMITATIONS-AND-FUTURE.md.
+
+\section{Conclusions and Recommendations}
+% Recycle criteria language; CEI + least privilege;
+% Future work from LIMITATIONS-AND-FUTURE.md
+% (ERC-1155 always-callback contrast; payment/supply before first safe*;
+% Guard depth; fairness/quota framing).
+
+\appendices
+\section{Key Lab Artefacts}
+% Paths on levi_dev: contracts, tests, CALLBACK-FLOW, SEPOLIA-MINT, LIMITATIONS-AND-FUTURE.
+
+\section{Public Sources for the Approval Hook}
+% Check Point / Beosin / CNA / CybersecAsia — public reports only.
+
+\begin{thebibliography}{99}
+\bibitem{eip721} W.~Entriken et al., ``EIP-721: Non-Fungible Token Standard,'' Ethereum Improvement Proposals.
+\bibitem{eip1155} W.~Radomski et al., ``EIP-1155: Multi Token Standard,'' Ethereum Improvement Proposals.
+% Add Check Point, Beosin, CNA, OpenZeppelin docs, lab RESEARCH.md as needed.
+\end{thebibliography}
+
+\end{document}
