@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>自然语言规则驱动的 Agent 审计闭环 · 本地报告</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+      background: #0a1020;
+      color: #edf2fa;
+      --panel: #121b2c;
+      --panel-2: #18243a;
+      --line: #2a3953;
+      --muted: #a5b5ca;
+      --accent: #72d8c5;
+      --accent-soft: #173b3a;
+      --good: #9fddb0;
+      --good-soft: #183826;
+      --bad: #f0a1a1;
+      --bad-soft: #412128;
+      --warning: #efce83;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; background: radial-gradient(circle at 75% 0, #152444 0, #0a1020 38%); }
+    button, select { font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 30px 22px 64px; }
+    header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
+    h1 { margin: 0 0 8px; font-size: clamp(25px, 4vw, 36px); line-height: 1.2; letter-spacing: -.02em; }
+    h2 { margin: 0; font-size: 20px; }
+    h3 { margin: 0; font-size: 16px; }
+    p { margin: 0; line-height: 1.6; }
+    .subtitle, .muted, .generated { color: var(--muted); }
+    .subtitle { max-width: 720px; }
+    .local { flex: none; padding: 7px 12px; border: 1px solid #37675f; border-radius: 999px; color: var(--accent); font-size: 13px; }
+    .workflow { margin: 27px 0 22px; }
+    .workflow-status { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 12px; padding: 13px 15px; border-radius: 12px; background: var(--accent-soft); }
+    .workflow-status strong { color: var(--accent); }
+    .workflow-status span { color: var(--muted); font-size: 13px; text-align: right; }
+    .workflow-rail { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 18px; align-items: stretch; }
+    .workflow-step { position: relative; min-width: 0; min-height: 108px; padding: 13px 10px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); color: #edf2fa; text-align: left; }
+    .workflow-step:not(:last-child)::after { content: "→"; position: absolute; top: 42px; right: -15px; color: var(--accent); pointer-events: none; }
+    .workflow-step[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent); }
+    .workflow-number { display: block; color: var(--muted); font-size: 12px; margin-bottom: 7px; }
+    .workflow-title { display: block; font-weight: 650; line-height: 1.35; }
+    .workflow-actor { display: block; color: var(--muted); font-size: 12px; line-height: 1.35; margin-top: 7px; }
+    .workflow-step[data-status="gate"], .workflow-step[data-status="manual"] { border-style: dashed; }
+    .workflow-detail { margin-top: 12px; display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(240px, .7fr); gap: 14px; padding: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 15px; }
+    .workflow-detail h2 { margin-bottom: 7px; }
+    .workflow-detail-copy { min-width: 0; }
+    .workflow-detail-meta { display: grid; gap: 8px; align-content: start; }
+    .workflow-detail-meta div { padding: 9px 11px; border-radius: 9px; background: var(--panel-2); }
+    .workflow-detail-meta span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 3px; }
+    .workflow-detail-meta code, .workflow-detail-meta strong { overflow-wrap: anywhere; }
+    .workflow-input { margin-top: 12px; padding: 11px 12px; border-left: 3px solid var(--accent); background: var(--panel-2); color: #dfe8f5; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .loop-note { margin-top: 10px; color: var(--muted); font-size: 13px; }
+    .summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .stage-summary-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 18px 0 9px; }
+    .stage-summary-head span { color: var(--muted); font-size: 13px; }
+    .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 15px; padding: 16px; }
+    .stat-label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 5px; }
+    .stat-value { display: block; font-size: 25px; font-weight: 650; font-variant-numeric: tabular-nums; }
+    .stat-value.good { color: var(--good); }
+    .stat-value.bad { color: var(--bad); }
+    .progress { margin-top: 12px; height: 7px; background: #27354c; border-radius: 99px; overflow: hidden; }
+    .progress div { height: 100%; background: var(--good); }
+    .section { margin-top: 24px; }
+    .section-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 13px; margin-bottom: 12px; }
+    .rule-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+    .rule-tabs button { color: #dfe8f5; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; min-height: 40px; }
+    .rule-tabs button[aria-pressed="true"] { color: #071411; background: var(--accent); border-color: var(--accent); font-weight: 650; }
+    .rule-overview { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+    .rule-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+    .tag { display: inline-block; padding: 4px 8px; border-radius: 7px; background: var(--panel-2); color: var(--accent); font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .scenario-control { display: flex; align-items: center; gap: 10px; }
+    .scenario-control label { color: var(--muted); font-size: 13px; }
+    select { min-height: 40px; max-width: 430px; color: #edf2fa; background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 7px 30px 7px 10px; }
+    .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
+    .variant { border: 1px solid var(--line); border-radius: 15px; overflow: hidden; background: var(--panel); }
+    .variant.bad { border-top: 4px solid var(--bad); }
+    .variant.good { border-top: 4px solid var(--good); }
+    .variant-head { padding: 17px 18px 13px; display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+    .status { padding: 5px 8px; border-radius: 7px; font-size: 12px; font-weight: 650; }
+    .status.bad { color: var(--bad); background: var(--bad-soft); }
+    .status.good { color: var(--good); background: var(--good-soft); }
+    .status.fail { color: var(--warning); background: #3e3520; }
+    .verdict { margin: 0 18px 15px; padding: 12px; border-radius: 10px; background: var(--panel-2); display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .verdict span { color: var(--muted); font-size: 12px; display: block; margin-bottom: 4px; }
+    .verdict strong { font-size: 15px; }
+    .evidence { border-top: 1px solid var(--line); padding: 15px 18px 18px; }
+    .evidence h3 { margin-bottom: 10px; }
+    .evidence-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .datum { background: var(--panel-2); border-radius: 9px; padding: 10px; min-width: 0; }
+    .datum span { display: block; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+    .datum strong { display: block; margin-top: 4px; font-size: 18px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+    .matrix { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 15px; overflow: hidden; }
+    .matrix th, .matrix td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+    .matrix th { color: var(--muted); font-size: 12px; font-weight: 600; }
+    .matrix tr:last-child td { border-bottom: 0; }
+    .matrix .center { text-align: center; }
+    .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; }
+    .dot.good { background: var(--good); }
+    .dot.bad { background: var(--bad); }
+    .coverage-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+    .coverage-summary .stat { padding: 14px; }
+    .coverage-summary .stat-value { font-size: 22px; }
+    .risk-list { display: grid; gap: 9px; }
+    .risk { display: grid; grid-template-columns: minmax(150px, .8fr) minmax(220px, 1.4fr) auto; gap: 12px; align-items: center; padding: 13px 15px; background: var(--panel); border: 1px solid var(--line); border-radius: 11px; }
+    .risk code { color: var(--accent); overflow-wrap: anywhere; }
+    .risk-states { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+    .boundary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; }
+    .boundary-item { padding: 12px; background: var(--accent-soft); border-radius: 10px; color: var(--accent); text-align: center; font-size: 13px; }
+    footer { margin-top: 28px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    @media (max-width: 760px) {
+      .workflow-rail { grid-template-columns: 1fr; gap: 8px; }
+      .workflow-step { min-height: 0; }
+      .workflow-step:not(:last-child)::after { content: "↓"; top: auto; right: 50%; bottom: -13px; }
+      .workflow-detail { grid-template-columns: 1fr; }
+      .summary { grid-template-columns: 1fr 1fr; }
+      .compare { grid-template-columns: 1fr; }
+      .boundary { grid-template-columns: 1fr 1fr; }
+      .risk { grid-template-columns: 1fr; gap: 6px; }
+      .matrix-wrap { overflow-x: auto; }
+      .matrix { min-width: 650px; }
+    }
+    @media (max-width: 480px) {
+      .wrap { padding: 22px 14px 45px; }
+      header { display: block; }
+      .local { display: inline-block; margin-top: 12px; }
+      .workflow-status { display: block; }
+      .workflow-status span { display: block; margin-top: 5px; text-align: left; }
+      .summary { grid-template-columns: 1fr; }
+      .coverage-summary { grid-template-columns: 1fr; }
+      .section-head { align-items: stretch; }
+      .scenario-control { display: block; }
+      .scenario-control label { display: block; margin-bottom: 7px; }
+      select { width: 100%; }
+      .evidence-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <div>
+        <h1>自然语言规则驱动的 Agent 审计闭环</h1>
+        <p class="subtitle">看清研究者文字如何经过 Skill 和受限规则进入代码检测，以及结果何时需要用户确认，才能由 Agent 修改并重新验证。</p>
+      </div>
+      <span class="local">● 本地离线报告</span>
+    </header>
+
+    <section class="workflow" aria-labelledby="workflow-heading">
+      <div class="workflow-status">
+        <strong id="workflow-heading">规则文件就绪后，程序自动执行到“分级结果”</strong>
+        <span>自然语言转规则由 Agent 完成；修改源码必须由用户确认，不属于自动审计命令。</span>
+      </div>
+      <div class="workflow-rail" id="workflow-rail" role="group" aria-label="选择审计流程阶段"></div>
+      <article class="workflow-detail" aria-live="polite">
+        <div class="workflow-detail-copy">
+          <h2 id="workflow-detail-title"></h2>
+          <p id="workflow-detail-text"></p>
+          <blockquote class="workflow-input" id="workflow-input" hidden></blockquote>
+          <p class="loop-note" id="workflow-loop-note"></p>
+        </div>
+        <div class="workflow-detail-meta">
+          <div><span>执行者</span><strong id="workflow-detail-actor"></strong></div>
+          <div><span>当前状态</span><strong id="workflow-detail-status"></strong></div>
+          <div><span>输入 / 产物</span><code id="workflow-detail-artifact"></code></div>
+        </div>
+      </article>
+    </section>
+
+    <div class="stage-summary-head report-summary-head">
+      <h2 id="stage-summary-heading">当前步骤摘要</h2>
+      <span id="stage-summary-caption"></span>
+    </div>
+    <section class="summary" aria-labelledby="stage-summary-heading" aria-live="polite">
+      <div class="stat"><span class="stat-label" id="metric-label-0"></span><strong class="stat-value" id="metric-value-0"></strong></div>
+      <div class="stat"><span class="stat-label" id="metric-label-1"></span><strong class="stat-value" id="metric-value-1"></strong></div>
+      <div class="stat"><span class="stat-label" id="metric-label-2"></span><strong class="stat-value" id="metric-value-2"></strong></div>
+      <div class="stat"><span class="stat-label" id="metric-label-3"></span><strong class="stat-value" id="metric-value-3"></strong></div>
+    </section>
+
+    <section class="section" aria-labelledby="rule-heading">
+      <div class="section-head">
+        <div>
+          <h2 id="rule-heading">逐条查看研究规则</h2>
+          <p class="muted">选择规则和参数，直接比较两种实现的观察结果。</p>
+        </div>
+        <div class="scenario-control">
+          <label for="scenario-select">参数场景</label>
+          <select id="scenario-select"></select>
+        </div>
+      </div>
+      <div class="rule-tabs" id="rule-tabs" role="group" aria-label="选择业务规则"></div>
+      <article class="rule-overview" style="margin-top: 12px">
+        <div class="rule-meta"><span class="tag" id="rule-id"></span><span class="tag" id="rule-template"></span></div>
+        <p id="rule-description"></p>
+      </article>
+      <div class="compare" aria-live="polite">
+        <article class="variant bad" id="vulnerable-panel"></article>
+        <article class="variant good" id="fixed-panel"></article>
+      </div>
+    </section>
+
+    <section class="section" id="coverage-section" aria-labelledby="coverage-heading" hidden>
+      <div class="section-head">
+        <div><h2 id="coverage-heading">用户规则未覆盖的回调风险</h2><p class="muted">本地演示表示教学场景已观察到状态破坏；静态候选仍需补充可达性和参数验证。</p></div>
+      </div>
+      <div class="coverage-summary">
+        <div class="stat"><span class="stat-label">静态候选</span><strong class="stat-value" id="static-candidates"></strong></div>
+        <div class="stat"><span class="stat-label">规则未覆盖</span><strong class="stat-value bad" id="undeclared-candidates"></strong></div>
+        <div class="stat"><span class="stat-label">未声明且已本地演示</span><strong class="stat-value bad" id="demonstrated-undeclared"></strong></div>
+      </div>
+      <div class="risk-list" id="risk-list"></div>
+    </section>
+
+    <section class="section" aria-labelledby="matrix-heading">
+      <div class="section-head">
+        <div><h2 id="matrix-heading">全部场景矩阵</h2><p class="muted">红点表示业务规则被违反，绿点表示业务规则得到保持。</p></div>
+      </div>
+      <div class="matrix-wrap"><table class="matrix" id="matrix"><thead><tr><th>规则</th><th>参数</th><th class="center">漏洞版</th><th class="center">修复版</th><th class="center">符合研究预期</th></tr></thead><tbody></tbody></table></div>
+    </section>
+
+    <section class="section" aria-labelledby="boundary-heading">
+      <div class="section-head"><div><h2 id="boundary-heading">执行安全边界</h2><p class="muted">页面数据来自本地测试报告，打开报告不会发起网络请求。</p></div></div>
+      <div class="boundary" id="boundary"></div>
+    </section>
+
+    <footer>
+      <div class="generated" id="generated"></div>
+      <p>该结果只说明项目中的教学模型是否符合研究者声明的预期，不构成生产安全证明，也不涉及真实资产。</p>
+    </footer>
+  </main>
+
+  <script>
+    const payload = /* __RULE_REPORT_DATA__ */ null;
+    const labels = {
+      "one-time-mint": "一次性铸造资格",
+      "collateral-coverage": "抵押覆盖债务",
+      "funded-value": "支出不超过投入"
+    };
+    const evidenceLabels = {
+      finalNftBalance: "最终 NFT 数量", callbacks: "回调次数", reentrySucceeded: "回调重入成功",
+      withdrawalRejected: "取回被拒绝", remainingCollateral: "剩余抵押数", remainingDebt: "剩余债务",
+      fundedValue: "调用者投入", finalBalance: "最终余额", outerSeriesId: "外层系列 ID", callbackSeriesId: "回调系列 ID"
+    };
+    const workflowData = payload?.workflow ?? {
+      command: "pnpm audit:agent",
+      automaticThrough: "result",
+      autoFix: false,
+      naturalLanguageText: "这里会展示研究者提供的自然语言规则。请打开项目根目录的 business-rule-report.html 查看实际报告数据。",
+      stages: [
+        { id: "input", title: "自然语言", actor: "研究者", status: "ready", statusLabel: "已接入", artifact: "rules/research-brief.txt", detail: "研究者描述业务不变量与预期。" },
+        { id: "skill", title: "Skill 理解", actor: "Codex Skill", status: "agent", statusLabel: "Agent 执行", artifact: ".agents/skills/nft-callback-auditor/SKILL.md", detail: "Skill 约束 Agent 的本地审计流程。" },
+        { id: "rule", title: "受限规则", actor: "Agent + 校验器", status: "agent", statusLabel: "需 Agent 转译", artifact: "rules/research-rule-spec.json", detail: "Agent 将文字绑定到代码标识符，程序负责校验结构。" },
+        { id: "detect", title: "检测代码", actor: "AST 程序 + Agent", status: "mixed", statusLabel: "部分自动", artifact: "analysis/shared-state-report.json", detail: "程序扫描回调和共享状态；动态测试只支持三个已审查适配器，Agent 负责结合上下文解释。" },
+        { id: "result", title: "分级结果", actor: "程序生成", status: "automatic", statusLabel: "程序自动", artifact: "analysis/rule-coverage-report.json", detail: "结果区分规则内、规则外、本地演示和静态候选。" },
+        { id: "approval", title: "修改确认", actor: "研究者", status: "gate", statusLabel: "必须确认", artifact: "用户明确授权", detail: "用户决定是否修改以及修改范围。" },
+        { id: "fix", title: "Agent 修改", actor: "Codex Agent", status: "manual", statusLabel: "按需执行", artifact: "源码 + 回归测试", detail: "获得授权后修改并重新验证；审计命令不会自动改源码。" }
+      ]
+    };
+    let ruleIndex = 0;
+    let parameterIndex = 0;
+    let workflowIndex = 0;
+    const byId = (id) => document.getElementById(id);
+    const formatOutcome = (value) => value === "preserve" ? "规则保持" : "规则违反";
+    const formatValue = (value) => typeof value === "boolean" ? (value ? "是" : "否") : String(value);
+    const parameterKey = (value) => JSON.stringify(value);
+    const parameterLabel = (value, index) => Object.keys(value).length === 0
+      ? `场景 ${index + 1} · 默认参数`
+      : `场景 ${index + 1} · ${Object.entries(value).map(([key, item]) => `${key}=${item}`).join("，")}`;
+
+    function observationFor(rule, variant, parameters) {
+      return rule.observations.find((item) => item.variant === variant && parameterKey(item.parameters) === parameterKey(parameters));
+    }
+
+    function renderStageMetrics(stage) {
+      const metrics = stage.metrics ?? [
+        { label: "当前阶段", value: stage.title },
+        { label: "执行者", value: stage.actor },
+        { label: "执行状态", value: stage.statusLabel },
+        { label: "自动修改", value: "否" }
+      ];
+      byId("stage-summary-caption").textContent = `当前：${stage.title} · 点击上方其他步骤会同步变化`;
+      metrics.slice(0, 4).forEach((metric, index) => {
+        byId(`metric-label-${index}`).textContent = metric.label;
+        const value = byId(`metric-value-${index}`);
+        value.textContent = metric.value;
+        value.classList.remove("good", "bad");
+        if (metric.tone === "good" || metric.tone === "bad") value.classList.add(metric.tone);
+      });
+    }
+
+    function renderWorkflowDetail() {
+      const stage = workflowData.stages[workflowIndex];
+      document.querySelectorAll("[data-workflow-index]").forEach((button) => {
+        button.setAttribute("aria-pressed", String(Number(button.dataset.workflowIndex) === workflowIndex));
+      });
+      byId("workflow-detail-title").textContent = `${workflowIndex + 1}. ${stage.title}`;
+      byId("workflow-detail-text").textContent = stage.detail;
+      byId("workflow-detail-actor").textContent = stage.actor;
+      byId("workflow-detail-status").textContent = stage.statusLabel;
+      byId("workflow-detail-artifact").textContent = stage.artifact;
+      renderStageMetrics(stage);
+      const input = byId("workflow-input");
+      input.hidden = stage.id !== "input";
+      input.textContent = stage.id === "input" ? workflowData.naturalLanguageText : "";
+      byId("workflow-loop-note").textContent = stage.id === "fix"
+        ? "修改完成后回到“检测代码”，重新生成结果和本地证据。"
+        : stage.id === "result"
+          ? `自动命令 ${workflowData.command} 到此结束；不会自动进入源码修改。`
+          : "";
+    }
+
+    function renderWorkflow() {
+      const rail = byId("workflow-rail");
+      workflowData.stages.forEach((stage, index) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "workflow-step";
+        button.dataset.workflowIndex = String(index);
+        button.dataset.status = stage.status;
+        button.setAttribute("aria-pressed", "false");
+        button.setAttribute("aria-label", `${index + 1}. ${stage.title}，${stage.actor}，${stage.statusLabel}`);
+        const number = document.createElement("span");
+        number.className = "workflow-number";
+        number.textContent = `${String(index + 1).padStart(2, "0")} · ${stage.statusLabel}`;
+        const title = document.createElement("span");
+        title.className = "workflow-title";
+        title.textContent = stage.title;
+        const actor = document.createElement("span");
+        actor.className = "workflow-actor";
+        actor.textContent = stage.actor;
+        button.append(number, title, actor);
+        button.addEventListener("click", () => { workflowIndex = index; renderWorkflowDetail(); });
+        rail.append(button);
+      });
+      renderWorkflowDetail();
+    }
+
+    function renderVariant(panelId, title, observation) {
+      const panel = byId(panelId);
+      panel.replaceChildren();
+      const head = document.createElement("div");
+      head.className = "variant-head";
+      const heading = document.createElement("h3");
+      heading.textContent = title;
+      const status = document.createElement("span");
+      status.className = `status ${observation.passed ? (observation.observed === "preserve" ? "good" : "bad") : "fail"}`;
+      status.textContent = observation.passed ? "✓ 符合预期" : "! 与预期不符";
+      head.append(heading, status);
+
+      const verdict = document.createElement("div");
+      verdict.className = "verdict";
+      for (const [label, value] of [["研究者预期", observation.expected], ["本地实际观察", observation.observed]]) {
+        const item = document.createElement("div");
+        const caption = document.createElement("span");
+        caption.textContent = label;
+        const strong = document.createElement("strong");
+        strong.textContent = formatOutcome(value);
+        item.append(caption, strong);
+        verdict.append(item);
+      }
+
+      const evidence = document.createElement("div");
+      evidence.className = "evidence";
+      const evidenceHeading = document.createElement("h3");
+      evidenceHeading.textContent = "本地观察证据";
+      const grid = document.createElement("div");
+      grid.className = "evidence-grid";
+      for (const [key, value] of Object.entries(observation.evidence)) {
+        const datum = document.createElement("div");
+        datum.className = "datum";
+        const label = document.createElement("span");
+        label.textContent = evidenceLabels[key] ?? key;
+        const strong = document.createElement("strong");
+        strong.textContent = formatValue(value);
+        datum.append(label, strong);
+        grid.append(datum);
+      }
+      evidence.append(evidenceHeading, grid);
+      panel.append(head, verdict, evidence);
+    }
+
+    function renderRule() {
+      const rule = payload.rules[ruleIndex];
+      const select = byId("scenario-select");
+      select.replaceChildren();
+      rule.parameters.forEach((parameters, index) => {
+        const option = document.createElement("option");
+        option.value = String(index);
+        option.textContent = parameterLabel(parameters, index);
+        select.append(option);
+      });
+      if (parameterIndex >= rule.parameters.length) parameterIndex = 0;
+      select.value = String(parameterIndex);
+      document.querySelectorAll("[data-rule-index]").forEach((button) => {
+        button.setAttribute("aria-pressed", String(Number(button.dataset.ruleIndex) === ruleIndex));
+      });
+      byId("rule-id").textContent = rule.id;
+      byId("rule-template").textContent = labels[rule.template] ?? rule.template;
+      byId("rule-description").textContent = rule.description;
+      const parameters = rule.parameters[parameterIndex];
+      renderVariant("vulnerable-panel", "漏洞版", observationFor(rule, "vulnerable", parameters));
+      renderVariant("fixed-panel", "修复版", observationFor(rule, "fixed", parameters));
+    }
+
+    function renderTabs() {
+      const tabs = byId("rule-tabs");
+      payload.rules.forEach((rule, index) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.ruleIndex = String(index);
+        button.textContent = `${index + 1} · ${labels[rule.template] ?? rule.id}`;
+        button.addEventListener("click", () => { ruleIndex = index; parameterIndex = 0; renderRule(); });
+        tabs.append(button);
+      });
+    }
+
+    function renderMatrix() {
+      const body = byId("matrix").querySelector("tbody");
+      for (const rule of payload.rules) {
+        rule.parameters.forEach((parameters, index) => {
+          const vulnerable = observationFor(rule, "vulnerable", parameters);
+          const fixed = observationFor(rule, "fixed", parameters);
+          const row = document.createElement("tr");
+          const cells = [
+            labels[rule.template] ?? rule.id,
+            parameterLabel(parameters, index).replace(/^场景 \d+ · /, ""),
+            formatOutcome(vulnerable.observed),
+            formatOutcome(fixed.observed),
+            vulnerable.passed && fixed.passed ? "是" : "否"
+          ];
+          cells.forEach((value, cellIndex) => {
+            const cell = document.createElement("td");
+            if (cellIndex >= 2) cell.className = "center";
+            if (cellIndex === 2 || cellIndex === 3) {
+              const dot = document.createElement("span");
+              dot.className = `dot ${value === "规则保持" ? "good" : "bad"}`;
+              cell.append(dot, document.createTextNode(value));
+            } else cell.textContent = value;
+            row.append(cell);
+          });
+          body.append(row);
+        });
+      }
+    }
+
+    function renderBoundary() {
+      const values = [
+        ["执行环境", payload.safetyBoundary.chain === "ephemeral-hardhat" ? "Hardhat 临时链" : payload.safetyBoundary.chain],
+        ["RPC 调用", payload.safetyBoundary.rpcCalls ? "存在" : "无"],
+        ["私钥", payload.safetyBoundary.privateKeys ? "存在" : "无"],
+        ["真实资产", payload.safetyBoundary.realAssets ? "存在" : "无"]
+      ];
+      for (const [label, value] of values) {
+        const item = document.createElement("div");
+        item.className = "boundary-item";
+        item.textContent = `${label}：${value}`;
+        byId("boundary").append(item);
+      }
+    }
+
+    function renderCoverage() {
+      if (!payload.coverage) return;
+      byId("coverage-section").hidden = false;
+      byId("static-candidates").textContent = String(payload.coverage.summary.staticCandidates);
+      byId("undeclared-candidates").textContent = String(payload.coverage.summary.undeclaredCandidates);
+      byId("demonstrated-undeclared").textContent = String(payload.coverage.summary.locallyDemonstratedUndeclared);
+      const candidates = payload.coverage.candidates
+        .filter((item) => item.coverage === "undeclared")
+        .sort((left, right) => Number(right.evidenceLevel === "local-demonstration") - Number(left.evidenceLevel === "local-demonstration"));
+      for (const candidate of candidates) {
+        const row = document.createElement("div");
+        row.className = "risk";
+        const path = document.createElement("code");
+        path.textContent = `${candidate.contract}.${candidate.outerFunction} → ${candidate.candidateFunction}`;
+        const states = document.createElement("span");
+        states.className = "risk-states";
+        states.textContent = `回调后共享状态：${candidate.statesUsedAfterCallback.join("、") || "未解析"}`;
+        const status = document.createElement("span");
+        const demonstrated = candidate.evidenceLevel === "local-demonstration";
+        status.className = `status ${demonstrated ? "bad" : "fail"}`;
+        status.textContent = demonstrated ? "本地演示" : "静态候选";
+        row.append(path, states, status);
+        byId("risk-list").append(row);
+      }
+    }
+
+    renderWorkflow();
+    if (payload) {
+      byId("generated").textContent = `报告时间：${new Date(payload.generatedAt).toLocaleString("zh-CN")} · 规则摘要：${payload.digest}`;
+      byId("scenario-select").addEventListener("change", (event) => { parameterIndex = Number(event.target.value); renderRule(); });
+      renderTabs();
+      renderRule();
+      renderMatrix();
+      renderCoverage();
+      renderBoundary();
+    } else {
+      document.querySelectorAll(".report-summary-head, .summary, main > .section").forEach((element) => { element.hidden = true; });
+      byId("generated").textContent = "这是页面模板预览；实际检测数据位于项目根目录的 business-rule-report.html。";
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+interface:
+  display_name: "NFT Callback Auditor"
+  short_description: "Natural-language rules to local callback security checks"
+  default_prompt: "Use $nft-callback-auditor to audit these Solidity contracts against my business rules and identify uncovered callback risks."
+policy:
+  allow_implicit_invocation: true

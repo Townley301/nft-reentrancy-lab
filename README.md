@@ -48,8 +48,36 @@ pnpm verify:rules
 
 - `analysis/business-rule-report.json`：供工具读取的逐场景结果；
 - `analysis/business-rule-report.md`：供研究者阅读的预期/观察对照表。
+- `business-rule-report.html`：可交互的离线可视化报告，可直接双击打开。
 
-规则格式只允许项目内已有的三个回调模板，不接受任意代码、RPC、网络、钱包、账户、地址、助记词或私钥字段。参数数量和值域都有上限。完整的流程差距和仍保留的限制见 `analysis/workflow-gap-report.md`。
+如果 JSON/Markdown 验证结果已经存在，只想重新生成可视化页面，可运行：
+
+```bash
+pnpm visual:rules
+```
+
+可视化页面现在以“自然语言 → Skill 理解 → 受限规则 → 检测代码 → 分级结果 → 用户确认 → Agent 修改”为主流程。点击任一阶段可查看执行者、当前自动化状态和输入/产物；页面下方继续保留规则对照、规则外候选、场景证据和本地安全边界。页面将数据直接嵌入 HTML，不使用服务器、`fetch` 或外部资源。
+
+规则格式只允许项目内已有的三个回调模板，不接受任意代码、RPC、网络、钱包、账户、地址、助记词或私钥字段。参数数量和值域都有上限。项目结论与复现步骤见 `REPORT.md`。
+
+### 自然语言规则 Agent 与规则外风险
+
+项目级 Skill 位于 `.agents/skills/nft-callback-auditor/`。在 Codex 中可用 `$nft-callback-auditor` 调用，然后提供一段自然语言业务规则或规则文件。Agent 会保留原文，把规则绑定到本地代码中的合约、函数和状态标识符，写入受限的 `rules/research-rule-spec.json`，再运行：
+
+```bash
+pnpm audit:agent
+```
+
+该流程会同时检查：
+
+- 用户声明的规则覆盖了哪些静态回调候选；
+- 哪些回调候选没有被用户规则覆盖；
+- 哪些规则或未声明候选已有本地动态场景观察到不变量破坏；
+- 哪些结果仍只是静态候选，不能声称已经证明可利用。
+
+输出为 `analysis/rule-coverage-report.json` 和 `analysis/rule-coverage-report.md`，同时会把未声明风险和证据等级写入 `business-rule-report.html`。`rules/research-brief.txt` 是自然语言输入示例；它有意只声明铸造规则，因此报告会展示如何发现规则未提到的借贷与 FNFT 回调候选。
+
+自动化边界需要明确：`pnpm audit:agent` 从“已经存在结构化规则”开始执行测试、静态扫描、覆盖关联和报告生成；自然语言到 `research-rule-spec.json` 的语义绑定由 Codex Agent 按 Skill 完成，并不是命令行程序自行理解文字。审计结果也不会自动修改源码。只有研究者明确确认修改范围后，Agent 才修改实现或补充测试，再重新运行检测形成闭环。
 
 ### 第二版：共享状态防御分析器
 
@@ -73,7 +101,7 @@ pnpm verify:rules
 
 ### 用图形页面逐步观察
 
-`pnpm visual` 会重新创建一条临时本地链，运行三个教学案例的漏洞版和修复版，并把**实际本地交易收据中的事件日志**连同交易前后的状态，写入项目根目录的 `visual-report.html`。该文件已经随项目提供一份示例结果；想刷新结果时再执行生成命令即可。
+`pnpm visual` 会重新创建一条临时本地链，运行三个教学案例的漏洞版和修复版，并把**实际本地交易收据中的事件日志**连同交易前后的状态，写入项目根目录的 `visual-report.html`。报告属于可再生输出，不纳入 Git；需要查看时运行命令生成即可。
 
 在 PyCharm 中可直接找到 `visual-report.html`，右键选择 **Open in Browser**；也可以在访达中双击它。页面不需要服务器，也不会连接外部网站。你可以：
 
@@ -122,19 +150,26 @@ pnpm node
 ## 项目结构
 
 ```text
+.agents/skills/nft-callback-auditor/
+├── SKILL.md
+├── agents/openai.yaml
+└── references/rule-spec.md
 contracts/
 ├── common/ToyAssets.sol
 ├── hypebears/HypeBearsLab.sol
 ├── omni/OmniLab.sol
 └── revest/RevestLab.sol
+rules/
+├── callback-rules.json
+└── research-rule-spec.json
 scripts/
 ├── run-all.ts
-└── generate-visual-report.ts
+├── analyze-shared-state.mjs
+└── generate-callback-tests.mjs
 test/
-└── reentrancy-lab.ts
-viewer/
-└── template.html
-visual-report.html
+├── reentrancy-lab.ts
+└── business-invariants.ts
+REPORT.md
 ```
 
 每个案例均包含：

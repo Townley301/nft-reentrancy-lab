@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "localOnly": true,
+  "source": {
+    "kind": "natural-language",
+    "title": "研究者提供的 NFT 铸造规则",
+    "file": "rules/research-brief.txt"
+  },
+  "rules": [
+    {
+      "id": "one-mint-per-address",
+      "statement": "同一个地址只能使用一次 NFT 铸造资格，一次外层调用最多得到一枚 NFT。",
+      "expected": "preserve",
+      "scope": {
+        "contracts": ["HypeBearsVulnerable", "HypeBearsFixed"],
+        "functions": ["mintNFT"],
+        "states": ["addressMinted", "balanceOf"]
+      },
+      "dynamicTemplate": "one-time-mint",
+      "assumptions": []
+    }
+  ]
+}

@@ -3,6 +3,11 @@ artifacts/
 cache/
 coverage/
 typechain-types/
+analysis/
+test/generated/
+business-rule-report.html
+visual-report*.html
 .DS_Store
 .idea/
 .env
+*.log
