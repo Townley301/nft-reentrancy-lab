@@ -11,6 +11,7 @@ type Rule = {
   id: string;
   description: string;
   template: "one-time-mint" | "collateral-coverage" | "funded-value";
+  variants: Record<Variant, string>;
   parameters: Parameters[];
   expectations: Record<Variant, Outcome>;
 };
@@ -120,7 +121,7 @@ export function registerGeneratedCallbackRules(suite: RuleSuite) {
     const { viem } = await network.create();
 
     async function runOneTimeMint(rule: Rule, variant: Variant, parameters: Parameters) {
-      const contractName = variant === "vulnerable" ? "HypeBearsVulnerable" : "HypeBearsFixed";
+      const contractName = rule.variants[variant];
       const target = await viem.deployContract(contractName);
       const receiver = await viem.deployContract("HypeBearsCallbackStudent", [target.address]);
       await receiver.write.runLesson();
@@ -134,7 +135,7 @@ export function registerGeneratedCallbackRules(suite: RuleSuite) {
     }
 
     async function runCollateralCoverage(rule: Rule, variant: Variant, parameters: Parameters) {
-      const contractName = variant === "vulnerable" ? "OmniPoolVulnerable" : "OmniPoolFixed";
+      const contractName = rule.variants[variant];
       const nft = await viem.deployContract("ToyERC721");
       const token = await viem.deployContract("ToyERC20");
       const pool = await viem.deployContract(contractName, [nft.address, token.address]);
@@ -166,7 +167,7 @@ export function registerGeneratedCallbackRules(suite: RuleSuite) {
     }
 
     async function runFundedValue(rule: Rule, variant: Variant, parameters: Parameters) {
-      const contractName = variant === "vulnerable" ? "RevestVulnerable" : "RevestFixed";
+      const contractName = rule.variants[variant];
       const asset = await viem.deployContract("ToyERC20");
       const fnft = await viem.deployContract("ToyERC1155");
       const protocol = await viem.deployContract(contractName, [asset.address, fnft.address]);

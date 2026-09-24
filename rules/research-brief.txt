@@ -1,3 +1,10 @@
-业务规则：同一个地址只能使用一次 NFT 铸造资格，一次外层调用最多得到一枚 NFT。
+Business rule 1 — mint entitlement:
+One address may consume the NFT minting entitlement once. A single outer mint call must not increase that address's NFT balance by more than one, including any ERC-721 receiver callbacks.
 
-这是自然语言输入示例。它有意没有声明借贷抵押和 FNFT 支出规则，用来验证工具能否把规则未覆盖的回调风险单独列出。
+Business rule 2 — collateral coverage:
+After any NFT withdrawal, receiver callback, or liquidation sequence, a borrower's outstanding debt must not exceed the credit capacity of the NFT collateral that remains in the pool.
+
+Business rule 3 — funded-value conservation:
+An FNFT receiver must not redeem more value than it actually funded, even when an ERC-1155 receiver callback creates or modifies another series before the outer call finishes.
+
+These rules describe business invariants rather than attack steps. The Agent binds them to exact local contract, function, and state identifiers in research-rule-spec.json; deterministic programs validate and execute only reviewed bounded adapters.

@@ -1,23 +1,176 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "localOnly": true,
   "source": {
     "kind": "natural-language",
-    "title": "研究者提供的 NFT 铸造规则",
+    "title": "Researcher-provided NFT callback invariants",
     "file": "rules/research-brief.txt"
+  },
+  "lab": {
+    "name": "NFT callback invariant research lab",
+    "description": "Unified natural-language bindings and bounded local callback scenarios on an ephemeral Hardhat chain."
   },
   "rules": [
     {
       "id": "one-mint-per-address",
-      "statement": "同一个地址只能使用一次 NFT 铸造资格，一次外层调用最多得到一枚 NFT。",
+      "statement": "One address may consume the minting entitlement once, and one outer call may increase that address's NFT balance by at most one.",
       "expected": "preserve",
       "scope": {
         "contracts": ["HypeBearsVulnerable", "HypeBearsFixed"],
-        "functions": ["mintNFT"],
-        "states": ["addressMinted", "balanceOf"]
+        "functions": ["mintNFT", "onERC721Received"],
+        "states": ["addressMinted", "balanceOf", "callbacks", "reentrySucceeded"]
       },
-      "dynamicTemplate": "one-time-mint",
-      "assumptions": []
+      "model": {
+        "actors": ["minter", "receiver"],
+        "preconditions": [
+          "The receiver has not consumed its minting entitlement.",
+          "The receiver is a contract capable of handling the ERC-721 callback."
+        ],
+        "actions": [
+          { "phase": "entry", "actor": "receiver", "function": "mintNFT" },
+          { "phase": "callback", "actor": "token", "function": "onERC721Received" },
+          { "phase": "reentry", "actor": "receiver", "function": "mintNFT" }
+        ],
+        "observables": ["addressMinted", "balanceOf", "callbacks", "reentrySucceeded"],
+        "invariant": {
+          "category": "uniqueness",
+          "relation": "lte",
+          "statement": "The receiver's NFT balance increase is at most one for one outer mint call."
+        }
+      },
+      "bindingConfidence": "high",
+      "assumptions": [],
+      "evidenceRequired": ["static-state-conflict", "local-counterexample", "regression-confirmed"],
+      "dynamic": {
+        "adapter": "one-time-mint",
+        "path": {
+          "contract": "HypeBearsVulnerable",
+          "outerFunction": "mintNFT",
+          "reentryFunction": "mintNFT"
+        },
+        "variants": {
+          "vulnerableContract": "HypeBearsVulnerable",
+          "fixedContract": "HypeBearsFixed"
+        },
+        "parameters": [{}],
+        "expectations": {
+          "vulnerable": "violate",
+          "fixed": "preserve"
+        }
+      }
+    },
+    {
+      "id": "collateral-covers-debt",
+      "statement": "Outstanding debt must not exceed the borrowing capacity of the borrower's remaining NFT collateral after any callback sequence.",
+      "expected": "preserve",
+      "scope": {
+        "contracts": ["OmniPoolVulnerable", "OmniPoolFixed"],
+        "functions": ["supply", "borrow", "withdraw", "onERC721Received", "liquidate"],
+        "states": ["collateralCount", "debt", "depositorOf", "usingAsCollateral", "callbacks", "reentrySucceeded"]
+      },
+      "model": {
+        "actors": ["borrower", "receiver", "pool"],
+        "preconditions": [
+          "The borrower supplied two local toy NFTs.",
+          "The borrow amount is within the initial capacity but above the capacity of one remaining NFT.",
+          "The receiver can invoke liquidation from the ERC-721 callback."
+        ],
+        "actions": [
+          { "phase": "setup", "actor": "borrower", "function": "supply" },
+          { "phase": "setup", "actor": "borrower", "function": "borrow" },
+          { "phase": "entry", "actor": "borrower", "function": "withdraw" },
+          { "phase": "callback", "actor": "token", "function": "onERC721Received" },
+          { "phase": "reentry", "actor": "receiver", "function": "liquidate" }
+        ],
+        "observables": ["collateralCount", "debt", "depositorOf", "usingAsCollateral", "callbacks", "reentrySucceeded"],
+        "invariant": {
+          "category": "solvency",
+          "relation": "lte",
+          "statement": "debt <= collateralCount * CREDIT_PER_NFT"
+        }
+      },
+      "bindingConfidence": "high",
+      "assumptions": [
+        "The teaching model uses a fixed credit value of ten toy tokens per NFT."
+      ],
+      "evidenceRequired": ["static-state-conflict", "local-counterexample", "regression-confirmed"],
+      "dynamic": {
+        "adapter": "collateral-coverage",
+        "path": {
+          "contract": "OmniPoolVulnerable",
+          "outerFunction": "withdraw",
+          "reentryFunction": "liquidate"
+        },
+        "variants": {
+          "vulnerableContract": "OmniPoolVulnerable",
+          "fixedContract": "OmniPoolFixed"
+        },
+        "parameters": [
+          { "borrowAmount": 11 },
+          { "borrowAmount": 15 },
+          { "borrowAmount": 19 }
+        ],
+        "expectations": {
+          "vulnerable": "violate",
+          "fixed": "preserve"
+        }
+      }
+    },
+    {
+      "id": "payout-within-funded-value",
+      "statement": "The final value redeemed by a callback receiver must not exceed the value that receiver actually funded.",
+      "expected": "preserve",
+      "scope": {
+        "contracts": ["RevestVulnerable", "RevestFixed"],
+        "functions": ["createSeries", "onERC1155Received", "depositAdditionalToFNFT", "redeem"],
+        "states": ["nextId", "series", "createdId", "additionalId", "callbacks", "reentrySucceeded"]
+      },
+      "model": {
+        "actors": ["depositor", "receiver", "protocol"],
+        "preconditions": [
+          "A base series already exists.",
+          "The callback receiver funds only the bounded additional deposit.",
+          "The ERC-1155 receiver can create an additional series during the callback."
+        ],
+        "actions": [
+          { "phase": "entry", "actor": "receiver", "function": "createSeries" },
+          { "phase": "callback", "actor": "token", "function": "onERC1155Received" },
+          { "phase": "reentry", "actor": "receiver", "function": "depositAdditionalToFNFT" },
+          { "phase": "assertion", "actor": "receiver", "function": "redeem" }
+        ],
+        "observables": ["nextId", "series", "createdId", "additionalId", "callbacks", "reentrySucceeded"],
+        "invariant": {
+          "category": "conservation",
+          "relation": "lte",
+          "statement": "final receiver asset balance <= receiver funded value"
+        }
+      },
+      "bindingConfidence": "high",
+      "assumptions": [
+        "The protocol treasury starts with toy liquidity so an over-redemption is observable locally."
+      ],
+      "evidenceRequired": ["static-state-conflict", "local-counterexample", "regression-confirmed"],
+      "dynamic": {
+        "adapter": "funded-value",
+        "path": {
+          "contract": "RevestVulnerable",
+          "outerFunction": "createSeries",
+          "reentryFunction": "depositAdditionalToFNFT"
+        },
+        "variants": {
+          "vulnerableContract": "RevestVulnerable",
+          "fixedContract": "RevestFixed"
+        },
+        "parameters": [
+          { "outerQuantity": 3, "depositPerUnit": 1, "additionalQuantity": 1 },
+          { "outerQuantity": 5, "depositPerUnit": 2, "additionalQuantity": 2 },
+          { "outerQuantity": 8, "depositPerUnit": 3, "additionalQuantity": 2 }
+        ],
+        "expectations": {
+          "vulnerable": "violate",
+          "fixed": "preserve"
+        }
+      }
     }
   ]
 }

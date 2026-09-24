@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "research-rule-spec.schema.json",
-  "title": "Natural-language research rule audit specification",
+  "title": "Unified natural-language invariant audit specification",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "localOnly", "source", "rules"],
+  "required": ["schemaVersion", "localOnly", "source", "lab", "rules"],
   "properties": {
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": { "const": 2 },
     "localOnly": { "const": true },
     "source": {
       "type": "object",
@@ -18,46 +18,196 @@
         "file": { "type": "string", "minLength": 1 }
       }
     },
+    "lab": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "description"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 }
+      }
+    },
     "rules": {
       "type": "array",
       "minItems": 1,
       "maxItems": 50,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["id", "statement", "expected", "scope", "assumptions"],
-        "properties": {
-          "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" },
-          "statement": { "type": "string", "minLength": 1 },
-          "expected": { "const": "preserve" },
-          "scope": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["contracts", "functions", "states"],
-            "properties": {
-              "contracts": { "$ref": "#/$defs/identifiers" },
-              "functions": { "$ref": "#/$defs/identifiers" },
-              "states": { "$ref": "#/$defs/identifiers" }
-            }
-          },
-          "dynamicTemplate": {
-            "enum": ["one-time-mint", "collateral-coverage", "funded-value"]
-          },
-          "assumptions": {
-            "type": "array",
-            "maxItems": 20,
-            "items": { "type": "string", "minLength": 1 }
-          }
-        }
-      }
+      "items": { "$ref": "#/$defs/rule" }
     }
   },
   "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+    },
     "identifiers": {
       "type": "array",
       "maxItems": 50,
       "uniqueItems": true,
-      "items": { "type": "string", "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$" }
+      "items": { "$ref": "#/$defs/identifier" }
+    },
+    "strings": {
+      "type": "array",
+      "maxItems": 20,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contracts", "functions", "states"],
+      "properties": {
+        "contracts": { "$ref": "#/$defs/identifiers" },
+        "functions": { "$ref": "#/$defs/identifiers" },
+        "states": { "$ref": "#/$defs/identifiers" }
+      }
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["phase", "actor", "function"],
+      "properties": {
+        "phase": { "enum": ["setup", "entry", "callback", "reentry", "assertion"] },
+        "actor": { "type": "string", "minLength": 1 },
+        "function": { "$ref": "#/$defs/identifier" }
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actors", "preconditions", "actions", "observables", "invariant"],
+      "properties": {
+        "actors": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "preconditions": { "$ref": "#/$defs/strings" },
+        "actions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": { "$ref": "#/$defs/action" }
+        },
+        "observables": { "$ref": "#/$defs/identifiers" },
+        "invariant": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["category", "relation", "statement"],
+          "properties": {
+            "category": { "enum": ["uniqueness", "solvency", "conservation", "authorization", "consistency"] },
+            "relation": { "enum": ["lte", "gte", "eq", "predicate"] },
+            "statement": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "path": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contract", "outerFunction", "reentryFunction"],
+      "properties": {
+        "contract": { "$ref": "#/$defs/identifier" },
+        "outerFunction": { "$ref": "#/$defs/identifier" },
+        "reentryFunction": { "$ref": "#/$defs/identifier" }
+      }
+    },
+    "variants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vulnerableContract", "fixedContract"],
+      "properties": {
+        "vulnerableContract": { "$ref": "#/$defs/identifier" },
+        "fixedContract": { "$ref": "#/$defs/identifier" }
+      }
+    },
+    "expectations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vulnerable", "fixed"],
+      "properties": {
+        "vulnerable": { "enum": ["preserve", "violate"] },
+        "fixed": { "enum": ["preserve", "violate"] }
+      }
+    },
+    "dynamic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adapter", "path", "variants", "parameters", "expectations"],
+      "properties": {
+        "adapter": { "enum": ["one-time-mint", "collateral-coverage", "funded-value"] },
+        "path": { "$ref": "#/$defs/path" },
+        "variants": { "$ref": "#/$defs/variants" },
+        "parameters": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "items": { "type": "object" }
+        },
+        "expectations": { "$ref": "#/$defs/expectations" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "adapter": { "const": "one-time-mint" } } },
+          "then": { "properties": { "parameters": { "items": { "type": "object", "maxProperties": 0 } } } }
+        },
+        {
+          "if": { "properties": { "adapter": { "const": "collateral-coverage" } } },
+          "then": {
+            "properties": {
+              "parameters": {
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["borrowAmount"],
+                  "properties": { "borrowAmount": { "type": "integer", "minimum": 11, "maximum": 20 } }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "adapter": { "const": "funded-value" } } },
+          "then": {
+            "properties": {
+              "parameters": {
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["outerQuantity", "depositPerUnit", "additionalQuantity"],
+                  "properties": {
+                    "outerQuantity": { "type": "integer", "minimum": 1, "maximum": 10 },
+                    "depositPerUnit": { "type": "integer", "minimum": 1, "maximum": 5 },
+                    "additionalQuantity": { "type": "integer", "minimum": 1, "maximum": 3 }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "statement", "expected", "scope", "model", "bindingConfidence", "assumptions", "evidenceRequired"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" },
+        "statement": { "type": "string", "minLength": 1 },
+        "expected": { "const": "preserve" },
+        "scope": { "$ref": "#/$defs/scope" },
+        "model": { "$ref": "#/$defs/model" },
+        "bindingConfidence": { "enum": ["high", "medium", "low"] },
+        "assumptions": { "$ref": "#/$defs/strings" },
+        "evidenceRequired": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": { "enum": ["static-state-conflict", "local-counterexample", "regression-confirmed"] }
+        },
+        "dynamic": { "$ref": "#/$defs/dynamic" }
+      }
     }
   }
 }

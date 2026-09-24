@@ -7,6 +7,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { dynamicPathKey, validateResearchSpec } from "./lib/research-rule-spec.mjs";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(SCRIPT_DIR, "..");
@@ -15,80 +16,8 @@ const DEFAULT_STATIC = path.join(PROJECT_ROOT, "analysis", "shared-state-report.
 const DEFAULT_DYNAMIC = path.join(PROJECT_ROOT, "analysis", "business-rule-report.json");
 const OUTPUT_JSON = path.join(PROJECT_ROOT, "analysis", "rule-coverage-report.json");
 const OUTPUT_MD = path.join(PROJECT_ROOT, "analysis", "rule-coverage-report.md");
-const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
-const TEMPLATE_PATHS = new Map([
-  ["HypeBearsVulnerable/mintNFT/mintNFT", "one-time-mint"],
-  ["OmniPoolVulnerable/withdraw/liquidate", "collateral-coverage"],
-  ["RevestVulnerable/createSeries/depositAdditionalToFNFT", "funded-value"],
-]);
 
-function fail(message) {
-  throw new Error(`Invalid research rule specification: ${message}`);
-}
-
-function object(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function onlyKeys(value, allowed, label) {
-  for (const key of Object.keys(value)) if (!allowed.includes(key)) fail(`${label}.${key} is unsupported`);
-}
-
-function identifierList(value, label) {
-  if (!Array.isArray(value) || value.length > 50) fail(`${label} must be an array with at most 50 items`);
-  const unique = new Set();
-  for (const item of value) {
-    if (typeof item !== "string" || !IDENTIFIER.test(item)) fail(`${label} contains an invalid code identifier`);
-    if (unique.has(item)) fail(`${label} contains a duplicate identifier`);
-    unique.add(item);
-  }
-}
-
-export function validateResearchSpec(input) {
-  if (!object(input)) fail("root must be an object");
-  onlyKeys(input, ["schemaVersion", "localOnly", "source", "rules"], "root");
-  if (input.schemaVersion !== 1) fail("schemaVersion must be 1");
-  if (input.localOnly !== true) fail("localOnly must be true");
-  if (!object(input.source)) fail("source must be an object");
-  onlyKeys(input.source, ["kind", "title", "file"], "source");
-  if (input.source.kind !== "natural-language") fail("source.kind must be natural-language");
-  if (typeof input.source.title !== "string" || input.source.title.trim() === "") fail("source.title is required");
-  if (typeof input.source.file !== "string" || input.source.file.trim() === "") fail("source.file is required");
-  if (path.isAbsolute(input.source.file) || input.source.file.split(/[\\/]/).includes("..")) {
-    fail("source.file must remain inside the project");
-  }
-  if (!Array.isArray(input.rules) || input.rules.length === 0 || input.rules.length > 50) {
-    fail("rules must contain 1 to 50 entries");
-  }
-  const ids = new Set();
-  for (const [index, rule] of input.rules.entries()) {
-    const label = `rules[${index}]`;
-    if (!object(rule)) fail(`${label} must be an object`);
-    onlyKeys(rule, ["id", "statement", "expected", "scope", "dynamicTemplate", "assumptions"], label);
-    if (typeof rule.id !== "string" || !/^[a-z][a-z0-9-]{2,63}$/.test(rule.id)) fail(`${label}.id is invalid`);
-    if (ids.has(rule.id)) fail(`${label}.id is duplicated`);
-    ids.add(rule.id);
-    if (typeof rule.statement !== "string" || rule.statement.trim() === "") fail(`${label}.statement is required`);
-    if (rule.expected !== "preserve") fail(`${label}.expected must be preserve`);
-    if (!object(rule.scope)) fail(`${label}.scope must be an object`);
-    onlyKeys(rule.scope, ["contracts", "functions", "states"], `${label}.scope`);
-    identifierList(rule.scope.contracts, `${label}.scope.contracts`);
-    identifierList(rule.scope.functions, `${label}.scope.functions`);
-    identifierList(rule.scope.states, `${label}.scope.states`);
-    if (
-      rule.scope.contracts.length + rule.scope.functions.length + rule.scope.states.length === 0
-    ) fail(`${label}.scope must bind the natural-language rule to at least one code identifier`);
-    if (
-      rule.dynamicTemplate !== undefined &&
-      !["one-time-mint", "collateral-coverage", "funded-value"].includes(rule.dynamicTemplate)
-    ) fail(`${label}.dynamicTemplate is unsupported`);
-    if (!Array.isArray(rule.assumptions) || rule.assumptions.length > 20) fail(`${label}.assumptions is invalid`);
-    if (rule.assumptions.some((item) => typeof item !== "string" || item.trim() === "")) {
-      fail(`${label}.assumptions must contain non-empty strings`);
-    }
-  }
-  return input;
-}
+export { validateResearchSpec };
 
 function intersects(left, right) {
   const lookup = new Set(right);
@@ -118,6 +47,11 @@ function dynamicEvidence(dynamicReport, template) {
 
 export function analyzeCoverage(specInput, staticReport, dynamicReport) {
   const spec = validateResearchSpec(specInput);
+  const adapterByPath = new Map(
+    spec.rules
+      .filter((rule) => rule.dynamic !== undefined)
+      .map((rule) => [dynamicPathKey(rule.dynamic.path), rule.dynamic.adapter]),
+  );
   const candidates = [];
   for (const contract of staticReport.contracts ?? []) {
     for (const candidate of contract.reentryCandidates ?? []) {
@@ -127,7 +61,7 @@ export function analyzeCoverage(specInput, staticReport, dynamicReport) {
         .map((rule) => ({ rule, match: matchRule(rule, normalized) }))
         .filter((item) => item.match.matches);
       const key = `${normalized.contract}/${normalized.outerFunction}/${normalized.candidateFunction}`;
-      const template = TEMPLATE_PATHS.get(key);
+      const template = adapterByPath.get(key);
       const proof = dynamicEvidence(dynamicReport, template);
       candidates.push({
         ...normalized,
@@ -142,11 +76,14 @@ export function analyzeCoverage(specInput, staticReport, dynamicReport) {
 
   const ruleCoverage = spec.rules.map((rule) => {
     const matched = candidates.filter((candidate) => candidate.declaredBy.includes(rule.id));
-    const proof = dynamicEvidence(dynamicReport, rule.dynamicTemplate);
+    const proof = dynamicEvidence(dynamicReport, rule.dynamic?.adapter);
     return {
       id: rule.id,
       statement: rule.statement,
       scope: rule.scope,
+      model: rule.model,
+      bindingConfidence: rule.bindingConfidence,
+      evidenceRequired: rule.evidenceRequired,
       assumptions: rule.assumptions,
       matchedCandidates: matched.map((item) => ({
         contract: item.contract,
@@ -179,6 +116,8 @@ export function analyzeCoverage(specInput, staticReport, dynamicReport) {
       staticCandidates: candidates.length,
       coveredCandidates: candidates.length - undeclared.length,
       undeclaredCandidates: undeclared.length,
+      locallyDemonstratedCandidates: candidates.filter((item) => item.evidenceLevel === "local-demonstration").length,
+      staticOnlyCandidates: candidates.filter((item) => item.evidenceLevel === "static-candidate").length,
       locallyDemonstratedUndeclared: undeclared.filter((item) => item.evidenceLevel === "local-demonstration").length,
     },
     ruleCoverage,
@@ -194,17 +133,19 @@ function markdown(report) {
     `- 已声明规则：${report.summary.declaredRules}`,
     `- 静态回调候选：${report.summary.staticCandidates}`,
     `- 规则未覆盖候选：${report.summary.undeclaredCandidates}`,
+    `- 已有本地动态证据的候选路径：${report.summary.locallyDemonstratedCandidates}`,
+    `- 仍只有静态证据的候选路径：${report.summary.staticOnlyCandidates}`,
     `- 规则未覆盖且已有本地演示：${report.summary.locallyDemonstratedUndeclared}`,
     "",
     "> “本地演示”只表示教学环境中观察到不变量破坏；“静态候选”不等于已证明可利用。",
     "",
     "## 研究者声明规则",
     "",
-    "| 规则 | 状态 | 命中的静态路径 | 本地动态演示 |",
-    "|---|---|---:|---:|",
+    "| 规则 | 类别 | 绑定置信度 | 状态 | 命中的静态路径 | 本地动态场景 |",
+    "|---|---|---|---|---:|---:|",
   ];
   for (const rule of report.ruleCoverage) {
-    lines.push(`| ${rule.id} | ${rule.status} | ${rule.matchedCandidates.length} | ${rule.dynamicEvidence?.scenarios ?? 0} |`);
+    lines.push(`| ${rule.id} | ${rule.model.invariant.category} | ${rule.bindingConfidence} | ${rule.status} | ${rule.matchedCandidates.length} | ${rule.dynamicEvidence?.scenarios ?? 0} |`);
   }
   lines.push("", "## 规则未覆盖的候选路径", "");
   const undeclared = report.candidates.filter((item) => item.coverage === "undeclared");
@@ -242,7 +183,8 @@ export function writeCoverageReports({ specPath = DEFAULT_SPEC, staticPath = DEF
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const report = writeCoverageReports();
   console.log(`已对照 ${report.summary.declaredRules} 条研究规则与 ${report.summary.staticCandidates} 条本地静态候选。`);
+  console.log(`已有本地动态证据的候选：${report.summary.locallyDemonstratedCandidates}`);
+  console.log(`仍只有静态证据的候选：${report.summary.staticOnlyCandidates}`);
   console.log(`规则未覆盖候选：${report.summary.undeclaredCandidates}`);
-  console.log(`其中已有本地动态演示：${report.summary.locallyDemonstratedUndeclared}`);
   console.log("报告：analysis/rule-coverage-report.json 和 analysis/rule-coverage-report.md");
 }

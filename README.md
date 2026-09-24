@@ -34,50 +34,88 @@ pnpm visual
 pnpm analyze
 pnpm verify:v2
 pnpm verify:rules
+pnpm audit:agent
 ```
 
-### 由研究者业务规则生成回调测试
+## 第一阶段：统一的不变量驱动审计流程
 
-研究者只需按照 `rules/callback-rules.schema.json` 编辑 `rules/callback-rules.json`，为已审查的本地模板填写业务不变量、少量有上限的参数组合，以及漏洞版/修复版的预期（`violate` 或 `preserve`）。随后运行：
+第一阶段解决的是“自然语言规则”和“动态测试规则”分离的问题。现在 `rules/research-rule-spec.json` 是唯一事实来源，同时服务于静态覆盖分析、动态测试生成和可视化报告；旧的 `callback-rules.json` 已移除。
 
-```bash
-pnpm verify:rules
+每条统一规则都包含：
+
+- 研究者原始业务不变量与预期状态；
+- 精确的合约、函数和状态变量绑定；
+- actors、preconditions、callback/reentry actions 和 observables；
+- 不变量类别、关系和便于人工审查的表达；
+- 绑定置信度、解释假设和所需证据级别；
+- 可选的已审核动态适配器、候选路径、有界参数和漏洞版/修复版预期。
+
+权威格式定义在 `rules/research-rule-spec.schema.json`。程序还会执行跨字段检查，例如 action function 必须出现在绑定函数中、observable 必须出现在绑定状态中、动态候选路径必须属于声明 scope。规则禁止 RPC、网络、账户、地址、钱包、助记词、私钥和任意可执行代码字段。
+
+### Agent 与确定性程序的分工
+
+```text
+研究者自然语言
+    ↓
+Skill 指导 Agent 检查源码并建立语义绑定
+    ↓
+统一不变量 IR：rules/research-rule-spec.json
+    ↓
+确定性校验 + AST callback/shared-state 分析
+    ↓
+已审核适配器的有界本地测试
+    ↓
+静态候选 / 本地反例 / 修复回归证据
+    ↓
+研究者确认后才允许修改合约
 ```
 
-该命令会严格校验规则、生成 `test/generated/callback-rules.test.ts`、在 Hardhat 临时内存链上执行回调场景，并输出：
+Agent 负责理解自然语言、检查源码、拆分复合规则、记录假设并选择是否存在语义匹配的动态适配器。命令行程序不会自行理解任意自然语言，也不会自动修改合约；它只校验统一 IR、分析 Solidity AST、生成已审核测试并汇总证据。
 
-- `analysis/business-rule-report.json`：供工具读取的逐场景结果；
-- `analysis/business-rule-report.md`：供研究者阅读的预期/观察对照表。
-- `business-rule-report.html`：可交互的离线可视化报告，可直接双击打开。
+### 当前三个基准不变量
 
-如果 JSON/Markdown 验证结果已经存在，只想重新生成可视化页面，可运行：
+| 基准案例 | 不变量类别 | 动态适配器 | 本地参数 |
+|---|---|---|---|
+| HypeBears | uniqueness | `one-time-mint` | 1 组默认场景 |
+| OMNI | solvency | `collateral-coverage` | 3 个有界借款值 |
+| Revest | conservation | `funded-value` | 3 组数量/存款组合 |
 
-```bash
-pnpm visual:rules
-```
+这三个案例是第一阶段的已审核基准，不是通用漏洞库。静态分析器可以发现其他 callback/shared-state 候选；但新规则没有已审核适配器时，只能得到静态覆盖证据，不能声称已经动态证明可利用。
 
-可视化页面现在以“自然语言 → Skill 理解 → 受限规则 → 检测代码 → 分级结果 → 用户确认 → Agent 修改”为主流程。点击任一阶段可查看执行者、当前自动化状态和输入/产物；页面下方继续保留规则对照、规则外候选、场景证据和本地安全边界。页面将数据直接嵌入 HTML，不使用服务器、`fetch` 或外部资源。
+在当前教学代码上的验证结果是：静态分析列出 13 条未缓解候选路径，全部落在三个已声明规则的代码 scope 内；其中只有 3 条精确绑定路径具有本地动态反例，其余 10 条仍只是静态候选。三个适配器共运行 7 个漏洞参数场景和对应的 7 个修复回归场景。这里的“规则已覆盖”不等于“路径已证明可利用”。
 
-规则格式只允许项目内已有的三个回调模板，不接受任意代码、RPC、网络、钱包、账户、地址、助记词或私钥字段。参数数量和值域都有上限。项目结论与复现步骤见 `REPORT.md`。
+### 执行完整工作流
 
-### 自然语言规则 Agent 与规则外风险
-
-项目级 Skill 位于 `.agents/skills/nft-callback-auditor/`。在 Codex 中可用 `$nft-callback-auditor` 调用，然后提供一段自然语言业务规则或规则文件。Agent 会保留原文，把规则绑定到本地代码中的合约、函数和状态标识符，写入受限的 `rules/research-rule-spec.json`，再运行：
+先由研究者编辑 `rules/research-brief.txt`，再用 `$nft-callback-auditor` 让 Agent 检查代码并更新统一 IR。确认绑定后运行：
 
 ```bash
 pnpm audit:agent
 ```
 
-该流程会同时检查：
+该命令依次：
 
-- 用户声明的规则覆盖了哪些静态回调候选；
-- 哪些回调候选没有被用户规则覆盖；
-- 哪些规则或未声明候选已有本地动态场景观察到不变量破坏；
-- 哪些结果仍只是静态候选，不能声称已经证明可利用。
+1. 校验统一规则并生成 `test/generated/callback-rules.test.ts`；
+2. 在 Hardhat 临时内存链上运行漏洞版和修复版场景；
+3. 编译 Solidity 并执行 callback/shared-state 静态分析；
+4. 将声明规则与静态候选关联；
+5. 生成机器可读、Markdown 和离线 HTML 报告。
 
-输出为 `analysis/rule-coverage-report.json` 和 `analysis/rule-coverage-report.md`，同时会把未声明风险和证据等级写入 `business-rule-report.html`。`rules/research-brief.txt` 是自然语言输入示例；它有意只声明铸造规则，因此报告会展示如何发现规则未提到的借贷与 FNFT 回调候选。
+主要输出为：
 
-自动化边界需要明确：`pnpm audit:agent` 从“已经存在结构化规则”开始执行测试、静态扫描、覆盖关联和报告生成；自然语言到 `research-rule-spec.json` 的语义绑定由 Codex Agent 按 Skill 完成，并不是命令行程序自行理解文字。审计结果也不会自动修改源码。只有研究者明确确认修改范围后，Agent 才修改实现或补充测试，再重新运行检测形成闭环。
+- `analysis/business-rule-report.json`：供工具读取的逐场景结果；
+- `analysis/business-rule-report.md`：动态预期/观察对照；
+- `analysis/shared-state-report.json` 和 `.md`：静态 callback/shared-state 候选；
+- `analysis/rule-coverage-report.json` 和 `.md`：规则覆盖、未声明候选和证据级别；
+- `business-rule-report.html`：可交互的离线可视化报告，可直接双击打开。
+
+这些均为可再生输出，已被 `.gitignore` 排除。如果只需验证动态适配器或重新生成页面，可以分别运行：
+
+```bash
+pnpm verify:rules
+pnpm visual:rules
+```
+
+项目级 Skill 位于 `.agents/skills/nft-callback-auditor/`，可通过 `$nft-callback-auditor` 调用。项目结论和最小复现见 `REPORT.md`。
 
 ### 第二版：共享状态防御分析器
 
@@ -160,12 +198,15 @@ contracts/
 ├── omni/OmniLab.sol
 └── revest/RevestLab.sol
 rules/
-├── callback-rules.json
-└── research-rule-spec.json
+├── research-brief.txt
+├── research-rule-spec.json
+└── research-rule-spec.schema.json
 scripts/
 ├── run-all.ts
 ├── analyze-shared-state.mjs
-└── generate-callback-tests.mjs
+├── audit-rule-coverage.mjs
+├── generate-callback-tests.mjs
+└── lib/research-rule-spec.mjs
 test/
 ├── reentrancy-lab.ts
 └── business-invariants.ts

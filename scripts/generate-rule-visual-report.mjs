@@ -9,7 +9,7 @@ import { validateRules } from "./generate-callback-tests.mjs";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(SCRIPT_DIR, "..");
-const RULES_PATH = path.join(PROJECT_ROOT, "rules", "callback-rules.json");
+const RULES_PATH = path.join(PROJECT_ROOT, "rules", "research-rule-spec.json");
 const REPORT_PATH = path.join(PROJECT_ROOT, "analysis", "business-rule-report.json");
 const COVERAGE_PATH = path.join(PROJECT_ROOT, "analysis", "rule-coverage-report.json");
 const TEMPLATE_PATH = path.join(PROJECT_ROOT, "viewer", "business-rule-template.html");
@@ -173,8 +173,17 @@ const payload = {
       },
     ],
   },
-  rules: rules.rules.map((rule) => ({
-    ...rule,
+  rules: rules.rules.filter((rule) => rule.dynamic !== undefined).map((rule) => ({
+    id: rule.id,
+    description: rule.statement,
+    template: rule.dynamic.adapter,
+    variants: rule.dynamic.variants,
+    parameters: rule.dynamic.parameters,
+    expectations: rule.dynamic.expectations,
+    scope: rule.scope,
+    model: rule.model,
+    bindingConfidence: rule.bindingConfidence,
+    evidenceRequired: rule.evidenceRequired,
     observations: report.observations.filter((item) => item.ruleId === rule.id),
   })),
 };
