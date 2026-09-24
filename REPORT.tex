@@ -1,0 +1,97 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+
+\input{report/metrics.tex}
+
+\title{A Local-Only Workflow for Teaching NFT Callback Reentrancy}
+\author{Reproducible Toy NFT Research Lab}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This report presents a defensive teaching workflow for NFT callback reentrancy using only project-defined Toy NFTs and Toy Tokens on an ephemeral Hardhat chain. The workflow binds researcher-written invariants to local Solidity code, correlates static callback candidates with bounded local tests, evaluates a frozen generic executor, and records one review disposition for every candidate. It contains no public RPC configuration, wallet, private key, live contract address, deployment step, or real-asset transaction.
+\end{abstract}
+
+\section{Scope and Safety Boundary}
+
+The project is a synthetic educational laboratory rather than a reproduction of a complete production protocol. Every execution creates temporary local state and uses only simplified contracts stored in this repository. The results describe these Toy fixtures only and must not be interpreted as evidence about live contracts, real property, or economic exploitability.
+
+\section{Teaching Cases}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}lXX@{}}
+\toprule
+Case & Local invariant & Defensive ordering principle \\
+\midrule
+One-time mint & One outer call mints at most one Toy NFT & Consume the entitlement before the receiver callback \\
+Collateral coverage & Toy debt remains within recorded collateral capacity & Validate and finalize state before transferring collateral \\
+Funded value & Toy Token payout does not exceed funded value & Reserve a unique identifier before the callback \\
+Marketplace bond & One Toy listing bond is returned at most once & Close the listing before transferring the Toy NFT \\
+Batch voucher & Toy voucher balance does not exceed recorded credit & Record complete credit before the batch callback \\
+Temporary authorization & One temporary right transfers at most one Toy NFT & Consume authorization before the first transfer \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The dataset contains \RuleCount{} invariant rules: \DevelopmentRuleCount{} development rules and \HoldoutRuleCount{} holdouts. The reviewed adapters generate \ScenarioCount{} bounded vulnerable/fixed scenarios.
+
+\section{Workflow}
+
+The workflow consists of the following stages:
+
+\begin{enumerate}
+  \item preserve the researcher's natural-language invariant;
+  \item bind it to exact local contracts, functions, and state variables;
+  \item validate a unified rule and a restricted declarative adapter;
+  \item find callback/shared-state candidates from the local Solidity AST;
+  \item run bounded vulnerable/fixed comparisons on an ephemeral Hardhat chain;
+  \item correlate static structure, local observations, and hand-reviewed ground truth;
+  \item classify every candidate as locally demonstrated, static-only, or intentionally rejected for a documented Toy-fixture reason; and
+  \item regenerate JSON, Markdown, HTML, and LaTeX outputs under a reproducibility check.
+\end{enumerate}
+
+The generic adapter schema, validator, and runtime are frozen by SHA-256 digest. All \HoldoutsWithoutChangeCount{} holdouts ran without modifying that frozen engine, and the measured baseline drift is \BaselineDriftCount{} files.
+
+\section{Results}
+
+Static analysis reports \StaticCandidateCount{} unmitigated review candidates. Of these, \DemonstratedCandidateCount{} have an exact bounded local counterexample, \StaticOnlyCandidateCount{} remain static-only, and \RejectedCandidateCount{} are intentionally rejected negative controls with a documented blocking condition in the current Toy fixture. All \ReviewedCandidateCount{} candidates have a review record, leaving \UnreviewedCandidateCount{} unreviewed.
+
+The ground-truth manifest contains \LabeledPathCount{} labeled paths: \TruePositiveCount{} true positives, \FalsePositiveCount{} false positives, \FalseNegativeCount{} false negatives, and \TrueNegativeCount{} true negatives. Precision is \PrecisionPercent{}, recall is \RecallPercent{}, and specificity is \SpecificityPercent{}. All \DynamicPassedCount{}/\DynamicCheckCount{} declared dynamic checks pass.
+
+These measurements describe only the hand-labeled synthetic dataset. A static candidate is not proof of exploitability, and an intentionally rejected path is not a general safety claim.
+
+\section{Blinded Review Protocol}
+
+The repository can generate a six-case review packet from static facts only. The packet omits declared-rule matches, dynamic evidence, evidence levels, dispositions, reason codes, and review rationales. An independent reviewer can assess reachability, caller and ownership constraints, parameter alignment, and mapping-key aliasing before seeing the answer manifest. The current protocol status is \textbf{pending independent review}; this report does not claim that an external review has already occurred.
+
+\section{Threats to Validity}
+
+The fixtures simplify access control, integrations, upgradeability, token economics, and transaction composition. The dataset is small and partly designed by the same authors who created the workflow. Static analysis does not prove callback reachability, caller identity, modifier semantics, ownership transitions, argument satisfiability, or mapping-key aliasing. Dynamic tests cover deterministic bounded parameters rather than an unbounded state space. Tool and operating-system changes may also affect future installations despite the lockfile and CI checks.
+
+These limits are deliberate. The project is suitable as a reproducible defensive teaching prototype, not as a production auditor or a procedure for interacting with real assets.
+
+\section{Reproduction}
+
+With Node.js 22 and pnpm 12.4.1 installed, run:
+
+\begin{verbatim}
+pnpm install --frozen-lockfile
+pnpm verify:ci
+\end{verbatim}
+
+The command runs local tests, static analysis, bounded Toy callback scenarios, ground-truth evaluation, candidate-review validation, report generation, and metric-drift checks. No public blockchain connection is required or supported.
+
+\section{Conclusion}
+
+The workflow demonstrates how incomplete state updates around NFT receiver callbacks can violate business invariants in a controlled local environment. Its main contribution is evidence discipline: local demonstrations, unresolved structural candidates, and Toy-fixture negative controls remain separate, reviewable categories. The resulting artifacts are reproducible without enabling public-network deployment or real financial activity.
+
+\end{document}

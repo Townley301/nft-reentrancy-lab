@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "localOnly": true,
+  "status": "pending-independent-review",
+  "sample": [
+    {
+      "id": "review-01",
+      "path": { "contract": "AuthorizationVaultVulnerable", "outerFunction": "claimPrimary", "candidateFunction": "claimAdditional" }
+    },
+    {
+      "id": "review-02",
+      "path": { "contract": "RevestVulnerable", "outerFunction": "createSeries", "candidateFunction": "createSeries" }
+    },
+    {
+      "id": "review-03",
+      "path": { "contract": "PermissionedCallbackControl", "outerFunction": "deliver", "candidateFunction": "adminCancel" }
+    },
+    {
+      "id": "review-04",
+      "path": { "contract": "MarketplaceVulnerable", "outerFunction": "buy", "candidateFunction": "refundListing" }
+    },
+    {
+      "id": "review-05",
+      "path": { "contract": "OmniPoolVulnerable", "outerFunction": "withdraw", "candidateFunction": "supply" }
+    },
+    {
+      "id": "review-06",
+      "path": { "contract": "PermissionedCallbackControl", "outerFunction": "deliver", "candidateFunction": "deliver" }
+    }
+  ]
+}

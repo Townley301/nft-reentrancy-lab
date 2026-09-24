@@ -59,6 +59,8 @@ Stage 5 adds a versioned reproducibility contract and a read-only continuous-int
 
 Stage 6 adds a hand-reviewed disposition and constrained reason code for every static candidate. The validator requires the review manifest to match the complete current candidate set, prevents paths without dynamic evidence from being labeled locally demonstrated, and reserves intentional rejection for a documented blocking condition in the current Toy fixture.
 
+Stage 7 packages an English LaTeX report and a six-case blinded-review packet. LaTeX metrics are generated from the versioned expected summary and checked in CI. The packet exposes static local facts but omits existing rule matches, dynamic conclusions, dispositions, reason codes, and rationales. Its status remains pending independent review, so generating it is not presented as external validation.
+
 ## 4. What the Workflow Now Accomplishes
 
 The implemented workflow is:
@@ -83,7 +85,7 @@ Vulnerable/fixed comparison under the same bounded parameters
 Evidence correlation and JSON, Markdown, and offline HTML reports
 ```
 
-This workflow currently completes eight useful tasks:
+This workflow currently completes nine useful tasks:
 
 1. It preserves the researcher's prose while creating an auditable semantic binding to exact local code identifiers.
 2. It separates a static review hypothesis from a locally demonstrated invariant violation, avoiding the claim that an AST pattern alone proves exploitability.
@@ -93,18 +95,19 @@ This workflow currently completes eight useful tasks:
 6. It evaluates a frozen engine against hand-labeled positive and negative paths and records whether holdouts required an executor change.
 7. It compares all generated summary metrics with a reviewer-controlled expected file so that accidental result drift cannot pass silently.
 8. It records why each static path is demonstrated, unresolved, or rejected instead of treating every structural match as equivalent.
+9. It keeps Markdown and LaTeX results tied to the same versioned metrics and prepares a label-free sample for a separate reviewer.
 
 The workflow does not yet automatically understand arbitrary prose, synthesize a safe adapter for every contract, prove reachability, or establish production exploitability. Unsupported rules remain static-only until a reviewer supplies an appropriate local fixture and adapter.
 
 ## 5. Next Research Work
 
-Stage 6 completes candidate-level review coverage and documents the main validity limits. A final packaging stage should focus on independent review and presentation rather than adding attack capability.
+Stage 7 completes the reproducible report package and prepares the blinded sample. The remaining research action requires a genuinely separate reviewer rather than more implementation work.
 
 1. Preserve the frozen Stage 2 adapter schema, validator, and generic executor baseline.
-2. Ask an independent reviewer to inspect a sample of candidate dispositions without seeing the intended labels first.
-3. Add new negative controls only when they test a clearly stated analyzer limitation; do not inflate the dataset with redundant examples.
-4. Continue measuring path coverage, false positives, false negatives, unsupported-adapter rate, and whether each holdout required a schema/runtime change.
-5. Produce the final concise Markdown and LaTeX research summary from the versioned metrics.
+2. Give the generated blind packet and referenced local source files to an independent reviewer without the answer manifest or dynamic reports.
+3. Record agreement and disagreement before revealing the existing candidate labels; do not silently edit labels to improve agreement.
+4. Add new negative controls only when they test a clearly stated analyzer limitation; do not inflate the dataset with redundant examples.
+5. After independent review, rerun the clean-checkout workflow and create the final archival tag or release.
 
 If a holdout requires a new DSL operation, that operation should first be isolated, schema-validated, negatively tested, and reported as a workflow extension. The same case should not then be counted as untouched holdout evidence.
 
@@ -166,11 +169,13 @@ The current verified result is:
 - 15 hand-labeled evaluation paths: 6 true positives, 2 false positives, 0 false negatives, and 7 true negatives;
 - 75% precision, 100% recall, and 77.8% specificity on the labeled paths;
 - 12/12 dynamic ground-truth checks passed, 3/3 holdouts required no executor change, and frozen-engine drift is zero;
-- 68 passing tests in the complete suite, including candidate-review completeness, reproducibility drift, and safety-boundary rejection tests;
-- the generated JSON and offline HTML reports match `evaluation/expected-summary.json`.
+- 70 passing tests in the complete suite, including blind-packet label leakage, LaTeX metric consistency, candidate-review completeness, reproducibility drift, and safety-boundary rejection tests;
+- the generated JSON and offline HTML reports match `evaluation/expected-summary.json`;
+- `REPORT.tex` imports metrics generated from the same expected summary;
+- the six-case blind packet is ready, with status `pending-independent-review` and no claim of completed external validation.
 
 ## 9. Conclusion
 
 All six dynamic cases share the same underlying cause: critical business state remains incomplete or stale when control is transferred to an external NFT receiver callback. A robust fix generally combines the Checks-Effects-Interactions pattern, a cross-function reentrancy guard, and explicit business-invariant tests.
 
-The next step is a final packaging and independent-review stage: preserve the frozen engine, verify the candidate labels on a blinded sample, and produce matching Markdown and LaTeX summaries from the versioned local-only results.
+The implementation and local report package are complete. The next step is human: a separate reviewer should classify the six blinded local candidates before seeing the answer manifest, after which agreement and disagreements can be documented without changing the safety boundary.

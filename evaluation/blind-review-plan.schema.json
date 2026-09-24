@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "blind-review-plan.schema.json",
+  "title": "Local candidate blind-review plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "localOnly", "status", "sample"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "localOnly": { "const": true },
+    "status": { "const": "pending-independent-review" },
+    "sample": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/item" }
+    }
+  },
+  "$defs": {
+    "identifier": { "type": "string", "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$" },
+    "path": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contract", "outerFunction", "candidateFunction"],
+      "properties": {
+        "contract": { "$ref": "#/$defs/identifier" },
+        "outerFunction": { "$ref": "#/$defs/identifier" },
+        "candidateFunction": { "$ref": "#/$defs/identifier" }
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "path"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^review-[0-9]{2}$" },
+        "path": { "$ref": "#/$defs/path" }
+      }
+    }
+  }
+}

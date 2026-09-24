@@ -118,7 +118,7 @@ Adapter 的权威格式在 `rules/adapters/adapter-spec.schema.json`，程序级
 
 第四阶段加入 `temporary-authorization` holdout：本地 vault 给 receiver 一次临时资格，漏洞版在 ERC-721 callback 后才撤销，因此 callback 可以领取第二枚 Toy NFT；修复版在 callback 前消耗资格。该案例只新增 Toy fixture、统一规则和 Adapter JSON，没有修改冻结的 schema、校验器或通用执行器。
 
-当前完整验证结果：6 条规则生成 26 个本地动态场景；静态分析列出 23 条未缓解审查候选，其中 6 条精确绑定路径已有本地动态反例，15 条仍明确标记为仅静态证据，2 条教学负样本附有人工排除理由。15 条 ground-truth 路径包含 6 个 true positives、2 个 false positives、0 个 false negatives 和 7 个 true negatives；precision 为 75%，recall 为 100%，specificity 为 77.8%。12/12 个动态 ground-truth 检查通过，3/3 个 holdout 均未修改冻结执行器，baseline 漂移为 0。23/23 条静态候选均有人工 disposition 和 reason code。完整测试共 68 项通过。
+当前完整验证结果：6 条规则生成 26 个本地动态场景；静态分析列出 23 条未缓解审查候选，其中 6 条精确绑定路径已有本地动态反例，15 条仍明确标记为仅静态证据，2 条教学负样本附有人工排除理由。15 条 ground-truth 路径包含 6 个 true positives、2 个 false positives、0 个 false negatives 和 7 个 true negatives；precision 为 75%，recall 为 100%，specificity 为 77.8%。12/12 个动态 ground-truth 检查通过，3/3 个 holdout 均未修改冻结执行器，baseline 漂移为 0。23/23 条静态候选均有人工 disposition 和 reason code。Stage 7 完成最终报告与盲审包校验后，完整测试共 70 项通过。
 
 这里的“规则已覆盖”不等于“路径已证明可利用”，holdout 通过也只是当前受限 DSL 的局部泛化证据。
 
@@ -158,6 +158,16 @@ pnpm verify:ci
 
 校验器要求 review 与当前 AST 候选集合完全一致：不允许漏掉候选、不允许添加静态分析中不存在的路径，也不允许把没有本地动态证据的路径标成 `locally-demonstrated`。当前 23 条候选的分级是 6 条本地演示、15 条 static-only 和 2 条 intentionally rejected，未复核数为 0。这里的排除结论只针对本仓库的简化 Toy 合约，不能外推到真实协议。
 
+### 第七阶段：英文 LaTeX 报告与盲审准备
+
+最终阶段增加英文 `REPORT.tex`。其中实验数字通过 `report/metrics.tex` 从 `evaluation/expected-summary.json` 生成，不再人工重复填写。`pnpm verify:report` 会检查 LaTeX 是否导入并使用版本化指标，数字漂移会使验证失败。
+
+只有在人工确认预期摘要确实需要更新后，才运行 `pnpm generate:report-metrics` 重建指标宏；日常验证只运行 `pnpm verify:report`，不会自动接受新数字。
+
+运行 `pnpm generate:blind-review` 会生成六条候选的 `analysis/blind-review-packet.json`。数据包只保留本地静态路径、源码位置、callback 类型、共享状态和审查问题，并移除已有规则匹配、动态证据、evidence level、disposition、reason code 与 rationale。交接流程见 `review/BLIND_REVIEW.md`。
+
+当前状态仍是 `pending-independent-review`：盲审材料和防泄漏校验已经完成，但独立人员尚未提交结果，因此项目不会声称外部验证已经完成。审查过程同样只允许读取本地 Toy 合约，不允许公共 RPC、钱包、私钥、部署或真实资产。
+
 ### 执行完整工作流
 
 先由研究者编辑 `rules/research-brief.txt`，再用 `$nft-callback-auditor` 让 Agent 检查代码并更新统一 IR。确认绑定后运行：
@@ -176,7 +186,8 @@ pnpm verify:ci
 6. 对人工标注路径计算误报、漏报、动态结果和 baseline 漂移；
 7. 生成机器可读、Markdown 和离线 HTML 报告；
 8. 校验 23 条候选的人工 disposition、reason code 和动态证据一致性；
-9. 将生成摘要与版本化预期结果比较，并重新检查本地安全边界。
+9. 生成不含现有标签的本地盲审包；
+10. 将生成摘要与版本化预期结果比较，校验英文 LaTeX 指标，并重新检查本地安全边界。
 
 主要输出为：
 
@@ -185,7 +196,9 @@ pnpm verify:ci
 - `analysis/shared-state-report.json` 和 `.md`：静态 callback/shared-state 候选；
 - `analysis/rule-coverage-report.json` 和 `.md`：规则覆盖、未声明候选和证据级别；
 - `analysis/ground-truth-evaluation.json` 和 `.md`：人工标注集上的误报、漏报、动态结果和 baseline 漂移；
+- `analysis/blind-review-packet.json`：不含现有标签的独立复核输入，状态保持 pending；
 - `business-rule-report.html`：可交互的离线可视化报告，可直接双击打开。
+- `REPORT.tex`：从版本化指标宏读取结果的英文 LaTeX 报告源码。
 
 这些均为可再生输出，已被 `.gitignore` 排除。如果只需验证动态适配器或重新生成页面，可以分别运行：
 
@@ -316,26 +329,35 @@ scripts/
 ├── analyze-shared-state.mjs
 ├── audit-rule-coverage.mjs
 ├── generate-callback-tests.mjs
+├── generate-blind-review-packet.mjs
 ├── evaluate-ground-truth.mjs
+├── package-research-report.mjs
 ├── verify-reproducibility.mjs
 └── lib/
     ├── adapter-spec.mjs
     ├── candidate-review.mjs
+    ├── report-package.mjs
     └── research-rule-spec.mjs
 test/
 ├── adapter-spec.test.mjs
 ├── ground-truth-evaluator.test.mjs
 ├── reproducibility-verifier.test.mjs
+├── report-package.test.mjs
 ├── reentrancy-lab.ts
 ├── business-invariants.ts
 └── support/callback-rule-runtime.ts
 REPORT.md
+REPORT.tex
 evaluation/
+├── blind-review-plan.json
+├── blind-review-plan.schema.json
 ├── candidate-review.json
 ├── candidate-review.schema.json
 ├── expected-summary.json
 ├── ground-truth.json
 └── ground-truth.schema.json
+report/metrics.tex
+review/BLIND_REVIEW.md
 ```
 
 每个动态案例均包含：

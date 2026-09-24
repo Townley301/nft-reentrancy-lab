@@ -47,6 +47,8 @@ For benchmark work, `evaluation/ground-truth.json` is the hand-reviewed evaluati
 
 `evaluation/candidate-review.json` records one human disposition for every current static candidate. Use `locally-demonstrated` only when the exact path has matching dynamic evidence. Use `static-only` when reachability, authorization, state prerequisites, key aliasing, or an exact local scenario remains unresolved. Use `intentionally-rejected` only when a reviewed condition in the current Toy fixture blocks the path; the rationale must name that condition. Never interpret a rejection as a conclusion about a production contract.
 
+For independent review, use the generated `analysis/blind-review-packet.json`, not the candidate-review or coverage report. The packet intentionally omits existing labels and dynamic conclusions. Packet generation is preparation only; preserve the `pending-independent-review` status until a separate reviewer returns a first-pass result. The English LaTeX report imports `report/metrics.tex`, which must be generated from and checked against `evaluation/expected-summary.json`.
+
 ## Coverage interpretation
 
 The deterministic coverage analyzer matches declared scopes against AST callback candidates and obtains adapter-to-path mappings from the same specification. A match means the declared rule touches the same contract/function/state area; it does not prove the rule itself is complete.
