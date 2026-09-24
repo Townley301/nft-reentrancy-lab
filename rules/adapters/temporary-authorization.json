@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "id": "temporary-authorization",
+  "dataset": "holdout",
+  "description": "One temporary local authorization must allow at most one Toy NFT claim across an ERC-721 callback.",
+  "callbackStandard": "ERC721",
+  "binding": {
+    "path": { "contract": "AuthorizationVaultVulnerable", "outerFunction": "claimPrimary", "reentryFunction": "claimAdditional" },
+    "variants": { "vulnerableContract": "AuthorizationVaultVulnerable", "fixedContract": "AuthorizationVaultFixed" }
+  },
+  "parameterBounds": {
+    "primaryTokenId": { "minimum": 1, "maximum": 100 },
+    "additionalTokenId": { "minimum": 1, "maximum": 100 }
+  },
+  "deployments": [
+    { "id": "nft", "contract": "ToyERC721", "constructorArgs": [] },
+    {
+      "id": "vault",
+      "contract": { "vulnerable": "AuthorizationVaultVulnerable", "fixed": "AuthorizationVaultFixed" },
+      "constructorArgs": [{ "kind": "contract", "id": "nft" }]
+    },
+    {
+      "id": "receiver",
+      "contract": "AuthorizationCallbackStudent",
+      "constructorArgs": [{ "kind": "contract", "id": "vault" }]
+    }
+  ],
+  "setup": [
+    { "target": "nft", "function": "mint", "args": [{ "kind": "contract", "id": "vault" }, { "kind": "param", "name": "primaryTokenId" }] },
+    { "target": "nft", "function": "mint", "args": [{ "kind": "contract", "id": "vault" }, { "kind": "param", "name": "additionalTokenId" }] },
+    { "target": "vault", "function": "authorize", "args": [{ "kind": "contract", "id": "receiver" }] }
+  ],
+  "entry": {
+    "target": "receiver",
+    "function": "runLesson",
+    "args": [{ "kind": "param", "name": "primaryTokenId" }, { "kind": "param", "name": "additionalTokenId" }]
+  },
+  "observations": [
+    { "id": "final-nft-balance", "target": "nft", "function": "balanceOf", "args": [{ "kind": "contract", "id": "receiver" }] },
+    { "id": "approval-remaining", "target": "vault", "function": "approvedClaimer", "args": [{ "kind": "contract", "id": "receiver" }] },
+    { "id": "callbacks", "target": "receiver", "function": "callbacks", "args": [] },
+    { "id": "reentry-succeeded", "target": "receiver", "function": "reentrySucceeded", "args": [] }
+  ],
+  "assertion": {
+    "operator": "lte",
+    "left": { "kind": "observation", "id": "final-nft-balance" },
+    "right": { "kind": "uint", "value": "1" }
+  }
+}

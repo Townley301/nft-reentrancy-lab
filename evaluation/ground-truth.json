@@ -36,6 +36,11 @@
       "ruleId": "batch-vouchers-within-credit",
       "adapter": "batch-credit",
       "executorChanged": false
+    },
+    {
+      "ruleId": "one-claim-per-temporary-authorization",
+      "adapter": "temporary-authorization",
+      "executorChanged": false
     }
   ],
   "cases": [
@@ -155,6 +160,24 @@
       "expectedStatic": "absent",
       "dynamic": null,
       "rationale": "The same Toy NFT has already left the control before the callback, and a different token ID would write a different mapping slot; the structural detector does not model either condition."
+    },
+    {
+      "id": "authorization-vulnerable",
+      "dataset": "holdout",
+      "kind": "positive",
+      "path": { "contract": "AuthorizationVaultVulnerable", "outerFunction": "claimPrimary", "candidateFunction": "claimAdditional" },
+      "expectedStatic": "candidate",
+      "dynamic": { "ruleId": "one-claim-per-temporary-authorization", "variant": "vulnerable", "expectedOutcome": "violate" },
+      "rationale": "The temporary authorization remains active during the ERC-721 callback and permits an additional Toy NFT claim."
+    },
+    {
+      "id": "authorization-fixed",
+      "dataset": "holdout",
+      "kind": "negative",
+      "path": { "contract": "AuthorizationVaultFixed", "outerFunction": "claimPrimary", "candidateFunction": "claimAdditional" },
+      "expectedStatic": "absent",
+      "dynamic": { "ruleId": "one-claim-per-temporary-authorization", "variant": "fixed", "expectedOutcome": "preserve" },
+      "rationale": "The temporary authorization is consumed before the ERC-721 callback."
     }
   ]
 }

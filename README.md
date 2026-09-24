@@ -1,12 +1,13 @@
 # NFT Callback Reentrancy Local Lab
 
-一个完全在本地运行的 NFT 回调重入教学项目，对三个历史案例的**核心逻辑**进行最小化模拟，并使用两个独立 holdout 检验工作流的泛化能力：
+一个完全在本地运行的 NFT 回调重入教学项目，对三个历史案例的**核心逻辑**进行最小化模拟，并使用三个独立 holdout 检验工作流的泛化能力：
 
 1. HypeBears：ERC-721 `_safeMint` 回调导致同函数重入；
 2. OMNI Protocol：ERC-721 转账回调进入另一条清算函数；
 3. Revest Finance：ERC-1155 铸造回调读取过期的 FNFT 编号。
 4. Marketplace holdout：ERC-721 接收回调进入退款路径，使同一笔 Toy Token listing bond 被重复返还。
 5. Batch voucher holdout：ERC-1155 batch callback 在 credit 记录完成前进入 bonus 路径，使 Toy voucher 数量超过记录额度。
+6. Temporary authorization holdout：ERC-721 callback 在临时授权撤销前领取第二枚 Toy NFT。
 
 本项目不是原协议复刻，也不包含真实攻击所需的主网地址、RPC、私钥、闪电贷、价格操纵或资产兑换代码。所有交易都发生在一次性的 Hardhat 本地内存链上，只涉及项目内的 Toy NFT 和 Toy Token；它没有连接、部署或交易真实资产的能力。
 
@@ -107,6 +108,7 @@ Adapter 的权威格式在 `rules/adapters/adapter-spec.schema.json`，程序级
 | development | Revest | Toy Token 支出不超过调用者实际投入 | 3 | 6 |
 | holdout | Marketplace | 同一笔 Toy listing bond 最多返还一次 | 2 | 4 |
 | holdout | Batch voucher | Toy ERC-1155 voucher 总量不超过记录 credit | 2 | 4 |
+| holdout | Temporary authorization | 一次临时授权最多领取 1 枚 Toy NFT | 2 | 4 |
 
 ### 第三阶段：冻结基线、Ground truth 与负样本
 
@@ -117,9 +119,15 @@ Adapter 的权威格式在 `rules/adapters/adapter-spec.schema.json`，程序级
 - `SafeCallbackControl` 在 ERC-721 callback 前完成状态更新，静态分析不应报告对应路径；
 - `PermissionedCallbackControl` 用来暴露当前结构分析器不理解 admin 权限、token ownership 和 mapping key 区分的限制。
 
-`pnpm evaluate:ground-truth` 只在人工标注路径上计算 precision、recall、specificity、动态结果通过率和 baseline 漂移。当前结果不是“全都正确”：13 条标注路径中有 5 个 true positives、2 个 false positives、0 个 false negatives 和 6 个 true negatives；precision 为 71.4%，recall 为 100%，specificity 为 75%。10/10 个带动态预期的漏洞版/修复版检查通过，2/2 个 holdout 均未修改冻结执行器，baseline 漂移为 0。
+`pnpm evaluate:ground-truth` 只在人工标注路径上计算 precision、recall、specificity、动态结果通过率和 baseline 漂移。在 Stage 3 基线时，13 条标注路径中有 5 个 true positives、2 个 false positives、0 个 false negatives 和 6 个 true negatives。
 
-当前完整验证结果：5 条规则生成 22 个本地动态场景；静态分析列出 20 条未缓解审查候选，其中 5 条精确绑定路径已有本地动态反例，15 条仍明确标记为仅静态证据。2 条规则外候选来自刻意加入的权限负样本，并在 ground truth 中记录为已知误报。完整测试共 60 项通过。这里的“规则已覆盖”不等于“路径已证明可利用”，holdout 通过也只是当前受限 DSL 的局部泛化证据。
+### 第四阶段：Authorization-transition holdout
+
+第四阶段加入 `temporary-authorization` holdout：本地 vault 给 receiver 一次临时资格，漏洞版在 ERC-721 callback 后才撤销，因此 callback 可以领取第二枚 Toy NFT；修复版在 callback 前消耗资格。该案例只新增 Toy fixture、统一规则和 Adapter JSON，没有修改冻结的 schema、校验器或通用执行器。
+
+当前完整验证结果：6 条规则生成 26 个本地动态场景；静态分析列出 23 条未缓解审查候选，其中 6 条精确绑定路径已有本地动态反例，17 条仍明确标记为仅静态证据。15 条 ground-truth 路径包含 6 个 true positives、2 个 false positives、0 个 false negatives 和 7 个 true negatives；precision 为 75%，recall 为 100%，specificity 为 77.8%。12/12 个动态 ground-truth 检查通过，3/3 个 holdout 均未修改冻结执行器，baseline 漂移为 0。2 条规则外候选仍来自刻意保留的权限负样本。完整测试共 64 项通过。
+
+这里的“规则已覆盖”不等于“路径已证明可利用”，holdout 通过也只是当前受限 DSL 的局部泛化证据。
 
 新增本地教学案例时，通常只需添加：
 
@@ -245,6 +253,12 @@ pnpm node
 
 修复版：vault 在 batch transfer 前写入完整 credit，callback 中的 bonus 请求失败，Toy voucher 总量与记录 credit 一致。该场景只使用本地教学 token，不包含真实 NFT、市场或财产交易。
 
+### Temporary authorization holdout
+
+漏洞版：receiver 获得一次本地临时授权并领取第一枚 Toy NFT。ERC-721 callback 发生时授权仍有效，因此 `claimAdditional` 又转移一枚 Toy NFT，最终一次资格得到两枚。
+
+修复版：vault 在发送第一枚 Toy NFT 前撤销授权，callback 中的第二次领取失败。该场景没有真实身份、账户权限或资产，只验证本地教学状态的更新顺序。
+
 ## 项目结构
 
 ```text
@@ -253,6 +267,7 @@ pnpm node
 ├── agents/openai.yaml
 └── references/rule-spec.md
 contracts/
+├── authorization/AuthorizationLab.sol
 ├── batch/BatchVoucherLab.sol
 ├── common/ToyAssets.sol
 ├── controls/CallbackControls.sol
@@ -267,6 +282,7 @@ rules/
 │   ├── collateral-coverage.json
 │   ├── funded-value.json
 │   ├── marketplace-bond.json
+│   ├── temporary-authorization.json
 │   └── one-time-mint.json
 ├── research-brief.txt
 ├── research-rule-spec.json

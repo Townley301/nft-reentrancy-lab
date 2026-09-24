@@ -13,4 +13,7 @@ A listing bond must be returned at most once. This must remain true when the sel
 Holdout business rule — batch voucher credit consistency:
 The total balance of Toy ERC-1155 vouchers delivered to a receiver in a batch and its callback must not exceed that receiver's recorded credit.
 
-These rules describe business invariants rather than attack steps. The first three rules form the development set; the marketplace and batch-voucher rules are holdouts used to test whether the frozen generic adapter engine can execute new cases without case-specific branches. The Agent binds the rules to exact local contract, function, and state identifiers in research-rule-spec.json; deterministic programs validate and execute only reviewed bounded adapters.
+Holdout business rule — temporary authorization:
+One temporary authorization may transfer at most one Toy NFT to its receiver, including any ERC-721 callback sequence.
+
+These rules describe business invariants rather than attack steps. The first three rules form the development set; the marketplace, batch-voucher, and temporary-authorization rules are holdouts used to test whether the frozen generic adapter engine can execute new cases without case-specific branches. The Agent binds the rules to exact local contract, function, and state identifiers in research-rule-spec.json; deterministic programs validate and execute only reviewed bounded adapters.

@@ -285,6 +285,62 @@
           "fixed": "preserve"
         }
       }
+    },
+    {
+      "id": "one-claim-per-temporary-authorization",
+      "dataset": "holdout",
+      "statement": "One temporary authorization may transfer at most one Toy NFT to its receiver, including any ERC-721 callback sequence.",
+      "expected": "preserve",
+      "scope": {
+        "contracts": ["AuthorizationVaultVulnerable", "AuthorizationVaultFixed"],
+        "functions": ["authorize", "claimPrimary", "onERC721Received", "claimAdditional"],
+        "states": ["approvedClaimer", "balanceOf", "callbacks", "reentrySucceeded", "additionalTokenId"]
+      },
+      "model": {
+        "actors": ["authorized-receiver", "authorization-vault", "toy-nft"],
+        "preconditions": [
+          "The receiver has one temporary local authorization.",
+          "The local teaching vault owns two distinct Toy NFTs.",
+          "The receiver can request the additional local claim path from the ERC-721 callback."
+        ],
+        "actions": [
+          { "phase": "setup", "actor": "authorization-vault", "function": "authorize" },
+          { "phase": "entry", "actor": "authorized-receiver", "function": "claimPrimary" },
+          { "phase": "callback", "actor": "toy-nft", "function": "onERC721Received" },
+          { "phase": "reentry", "actor": "authorized-receiver", "function": "claimAdditional" }
+        ],
+        "observables": ["approvedClaimer", "balanceOf", "callbacks", "reentrySucceeded", "additionalTokenId"],
+        "invariant": {
+          "category": "authorization",
+          "relation": "lte",
+          "statement": "receiver Toy NFT balance increase per temporary authorization <= 1"
+        }
+      },
+      "bindingConfidence": "high",
+      "assumptions": [
+        "Authorization and both Toy NFT claims occur only inside one ephemeral local-chain fixture."
+      ],
+      "evidenceRequired": ["static-state-conflict", "local-counterexample", "regression-confirmed"],
+      "dynamic": {
+        "adapter": "temporary-authorization",
+        "path": {
+          "contract": "AuthorizationVaultVulnerable",
+          "outerFunction": "claimPrimary",
+          "reentryFunction": "claimAdditional"
+        },
+        "variants": {
+          "vulnerableContract": "AuthorizationVaultVulnerable",
+          "fixedContract": "AuthorizationVaultFixed"
+        },
+        "parameters": [
+          { "primaryTokenId": 11, "additionalTokenId": 12 },
+          { "primaryTokenId": 21, "additionalTokenId": 22 }
+        ],
+        "expectations": {
+          "vulnerable": "violate",
+          "fixed": "preserve"
+        }
+      }
     }
   ]
 }
