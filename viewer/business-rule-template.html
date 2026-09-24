@@ -104,7 +104,7 @@
     .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; }
     .dot.good { background: var(--good); }
     .dot.bad { background: var(--bad); }
-    .coverage-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+    .coverage-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
     .coverage-summary .stat { padding: 14px; }
     .coverage-summary .stat-value { font-size: 22px; }
     .risk-list { display: grid; gap: 9px; }
@@ -121,6 +121,7 @@
       .workflow-step:not(:last-child)::after { content: "↓"; top: auto; right: 50%; bottom: -13px; }
       .workflow-detail { grid-template-columns: 1fr; }
       .summary { grid-template-columns: 1fr 1fr; }
+      .coverage-summary { grid-template-columns: 1fr 1fr; }
       .compare { grid-template-columns: 1fr; }
       .boundary { grid-template-columns: 1fr 1fr; }
       .risk { grid-template-columns: 1fr; gap: 6px; }
@@ -209,11 +210,12 @@
 
     <section class="section" id="coverage-section" aria-labelledby="coverage-heading" hidden>
       <div class="section-head">
-        <div><h2 id="coverage-heading">用户规则未覆盖的回调风险</h2><p class="muted">本地演示表示教学场景已观察到状态破坏；静态候选仍需补充可达性和参数验证。</p></div>
+        <div><h2 id="coverage-heading">用户规则未覆盖的回调风险</h2><p class="muted">本地演示表示教学场景已观察到状态破坏；静态候选仍需验证；有理由排除仅适用于当前 Toy fixture。</p></div>
       </div>
       <div class="coverage-summary">
         <div class="stat"><span class="stat-label">静态候选</span><strong class="stat-value" id="static-candidates"></strong></div>
         <div class="stat"><span class="stat-label">规则未覆盖</span><strong class="stat-value bad" id="undeclared-candidates"></strong></div>
+        <div class="stat"><span class="stat-label">有理由排除</span><strong class="stat-value good" id="rejected-candidates"></strong></div>
         <div class="stat"><span class="stat-label">未声明且已本地演示</span><strong class="stat-value bad" id="demonstrated-undeclared"></strong></div>
       </div>
       <div class="risk-list" id="risk-list"></div>
@@ -471,6 +473,7 @@
       byId("coverage-section").hidden = false;
       byId("static-candidates").textContent = String(payload.coverage.summary.staticCandidates);
       byId("undeclared-candidates").textContent = String(payload.coverage.summary.undeclaredCandidates);
+      byId("rejected-candidates").textContent = String(payload.coverage.summary.intentionallyRejectedCandidates ?? 0);
       byId("demonstrated-undeclared").textContent = String(payload.coverage.summary.locallyDemonstratedUndeclared);
       const candidates = payload.coverage.candidates
         .filter((item) => item.coverage === "undeclared")
@@ -482,11 +485,12 @@
         path.textContent = `${candidate.contract}.${candidate.outerFunction} → ${candidate.candidateFunction}`;
         const states = document.createElement("span");
         states.className = "risk-states";
-        states.textContent = `回调后共享状态：${candidate.statesUsedAfterCallback.join("、") || "未解析"}`;
+        states.textContent = `回调后共享状态：${candidate.statesUsedAfterCallback.join("、") || "未解析"} · 理由：${candidate.reasonCode ?? "未复核"}`;
         const status = document.createElement("span");
         const demonstrated = candidate.evidenceLevel === "local-demonstration";
-        status.className = `status ${demonstrated ? "bad" : "fail"}`;
-        status.textContent = demonstrated ? "本地演示" : "静态候选";
+        const rejected = candidate.evidenceLevel === "intentionally-rejected";
+        status.className = `status ${demonstrated ? "bad" : rejected ? "good" : "fail"}`;
+        status.textContent = demonstrated ? "本地演示" : rejected ? "有理由排除" : "静态候选";
         row.append(path, states, status);
         byId("risk-list").append(row);
       }

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "candidate-review.schema.json",
+  "title": "Local static candidate review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "localOnly", "reviews"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "localOnly": { "const": true },
+    "reviews": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/review" }
+    }
+  },
+  "$defs": {
+    "identifier": { "type": "string", "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$" },
+    "path": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contract", "outerFunction", "candidateFunction"],
+      "properties": {
+        "contract": { "$ref": "#/$defs/identifier" },
+        "outerFunction": { "$ref": "#/$defs/identifier" },
+        "candidateFunction": { "$ref": "#/$defs/identifier" }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "disposition", "reasonCode", "rationale"],
+      "properties": {
+        "path": { "$ref": "#/$defs/path" },
+        "disposition": { "enum": ["locally-demonstrated", "static-only", "intentionally-rejected"] },
+        "reasonCode": {
+          "enum": [
+            "local-counterexample",
+            "no-reviewed-local-scenario",
+            "callback-reachability-unproven",
+            "authorization-unproven",
+            "state-prerequisites-unproven",
+            "state-index-alias-unproven",
+            "authorization-blocked",
+            "state-index-or-ownership-blocked"
+          ]
+        },
+        "rationale": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

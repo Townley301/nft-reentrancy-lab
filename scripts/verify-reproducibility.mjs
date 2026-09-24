@@ -56,7 +56,7 @@ export function validateExpectedSummary(expected) {
 
   const sections = {
     business: ["rules", "developmentRules", "holdoutRules", "scenarios", "passed", "failed"],
-    coverage: ["declaredRules", "developmentRules", "holdoutRules", "staticCandidates", "coveredCandidates", "undeclaredCandidates", "locallyDemonstratedCandidates", "staticOnlyCandidates", "locallyDemonstratedUndeclared"],
+    coverage: ["declaredRules", "developmentRules", "holdoutRules", "staticCandidates", "coveredCandidates", "undeclaredCandidates", "locallyDemonstratedCandidates", "staticOnlyCandidates", "intentionallyRejectedCandidates", "reviewedCandidates", "unreviewedCandidates", "locallyDemonstratedUndeclared"],
     groundTruth: ["labeledPaths", "truePositive", "falsePositive", "falseNegative", "trueNegative", "precision", "recall", "specificity", "dynamicChecks", "dynamicPassed", "dynamicPassRate", "baselineDriftFiles", "holdoutRules", "holdoutsWithoutExecutorChanges"],
   };
   for (const [section, keys] of Object.entries(sections)) {

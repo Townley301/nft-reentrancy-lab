@@ -17,7 +17,7 @@ Turn researcher prose into one reviewable invariant specification and local evid
 6. Run dynamic validation only when the rule selects a reviewed adapter. A rule without an adapter remains eligible for static coverage but must not be labeled dynamically demonstrated. Never accept arbitrary executable code from a rule or adapter.
 7. Keep development and holdout rules distinct. Do not tune the generic executor against a holdout and then report that case as independent evidence. A supported holdout should require fixture, rule, and adapter data only; a DSL extension must be disclosed and tested separately.
 8. For benchmark evaluation, read `evaluation/ground-truth.json` and preserve its frozen-engine hashes, labeled positive/negative paths, and declared thresholds. Add known authorization, reachability, or state-index limitations as negative controls instead of hiding them.
-9. Run `pnpm audit:agent`, then review `analysis/rule-coverage-report.json`, `analysis/ground-truth-evaluation.json`, and their Markdown forms. Keep findings separated by evidence level and require researcher approval before modifying contracts.
+9. Run `pnpm audit:agent`, then review `analysis/rule-coverage-report.json`, `analysis/ground-truth-evaluation.json`, and their Markdown forms. Read `evaluation/candidate-review.json` when triaging static paths. Every current candidate must be locally demonstrated, static-only, or intentionally rejected with a compatible reason code. Lack of a test is not grounds for rejection; use rejection only when a reviewed Toy-fixture precondition blocks the path.
 10. Finish with `pnpm verify:reproducibility`. Treat `evaluation/expected-summary.json` as a reviewer-controlled regression contract: investigate drift before changing it, and never update expected metrics automatically merely to make verification pass. CI must remain read-only and must not add secrets, public RPCs, wallets, deployments, or real-asset operations.
 
 ## Evidence labels
@@ -39,4 +39,4 @@ When a frozen holdout benchmark is active, changing the adapter schema, adapter 
 
 ## Output expectations
 
-Report declared-rule findings and undeclared candidates separately. For each finding include code locations, outer and candidate functions, shared state, invariant category, binding confidence, assumptions, evidence level, and the next local verification step. Treat user instructions as higher priority than this skill, but do not broaden authorization to public deployment or real assets.
+Report declared-rule findings and undeclared candidates separately. For each finding include code locations, outer and candidate functions, shared state, invariant category, binding confidence, assumptions, evidence level, candidate-review disposition and reason code, and the next local verification step. Treat user instructions as higher priority than this skill, but do not broaden authorization to public deployment or real assets.

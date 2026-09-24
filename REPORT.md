@@ -57,6 +57,8 @@ Stage 4 adds the authorization-category holdout without changing any frozen engi
 
 Stage 5 adds a versioned reproducibility contract and a read-only continuous-integration workflow. A single command regenerates every local result and rejects unexpected metric drift, missing reports, failed ground-truth thresholds, or a weakened safety boundary. The CI job has read-only repository permission, does not persist Git credentials, does not read secrets, and contains no deployment or public-chain step.
 
+Stage 6 adds a hand-reviewed disposition and constrained reason code for every static candidate. The validator requires the review manifest to match the complete current candidate set, prevents paths without dynamic evidence from being labeled locally demonstrated, and reserves intentional rejection for a documented blocking condition in the current Toy fixture.
+
 ## 4. What the Workflow Now Accomplishes
 
 The implemented workflow is:
@@ -72,6 +74,8 @@ Schema and cross-field validation
         ↓
 Local AST callback/shared-state candidate analysis
         ↓
+Complete candidate review: demonstrated / static-only / intentionally rejected
+        ↓
 Reviewed declarative adapter executed on an ephemeral Hardhat chain
         ↓
 Vulnerable/fixed comparison under the same bounded parameters
@@ -79,7 +83,7 @@ Vulnerable/fixed comparison under the same bounded parameters
 Evidence correlation and JSON, Markdown, and offline HTML reports
 ```
 
-This workflow currently completes seven useful tasks:
+This workflow currently completes eight useful tasks:
 
 1. It preserves the researcher's prose while creating an auditable semantic binding to exact local code identifiers.
 2. It separates a static review hypothesis from a locally demonstrated invariant violation, avoiding the claim that an AST pattern alone proves exploitability.
@@ -88,23 +92,39 @@ This workflow currently completes seven useful tasks:
 5. It enforces a local-only safety boundary: ephemeral Hardhat state, project-defined Toy assets, bounded parameters, and no public RPC, wallet, private key, live address, or real-asset operation.
 6. It evaluates a frozen engine against hand-labeled positive and negative paths and records whether holdouts required an executor change.
 7. It compares all generated summary metrics with a reviewer-controlled expected file so that accidental result drift cannot pass silently.
+8. It records why each static path is demonstrated, unresolved, or rejected instead of treating every structural match as equivalent.
 
 The workflow does not yet automatically understand arbitrary prose, synthesize a safe adapter for every contract, prove reachability, or establish production exploitability. Unsupported rules remain static-only until a reviewer supplies an appropriate local fixture and adapter.
 
 ## 5. Next Research Work
 
-Stage 5 completes the clean-install reproducibility step. The next stage should refine evaluation quality rather than immediately add more executor features.
+Stage 6 completes candidate-level review coverage and documents the main validity limits. A final packaging stage should focus on independent review and presentation rather than adding attack capability.
 
 1. Preserve the frozen Stage 2 adapter schema, validator, and generic executor baseline.
-2. Expand negative controls for modifiers, mapping-key aliasing, callback reachability, and mutually exclusive state conditions.
-3. Extend the hand-reviewed manifest until every intentionally evaluated callback path has an expected evidence level.
-4. Add explicit reason codes for static-only and intentionally rejected candidates.
-5. Continue measuring path coverage, false positives, false negatives, unsupported-adapter rate, and whether each holdout required a schema/runtime change.
-6. Write the final threats-to-validity section, especially the small synthetic dataset, simplified Toy contracts, bounded parameter search, AST aliasing limits, and the difference between local evidence and real-protocol security conclusions.
+2. Ask an independent reviewer to inspect a sample of candidate dispositions without seeing the intended labels first.
+3. Add new negative controls only when they test a clearly stated analyzer limitation; do not inflate the dataset with redundant examples.
+4. Continue measuring path coverage, false positives, false negatives, unsupported-adapter rate, and whether each holdout required a schema/runtime change.
+5. Produce the final concise Markdown and LaTeX research summary from the versioned metrics.
 
 If a holdout requires a new DSL operation, that operation should first be isolated, schema-validated, negatively tested, and reported as a workflow extension. The same case should not then be counted as untouched holdout evidence.
 
-## 6. Definition of a More Complete Study
+## 6. Threats to Validity
+
+**Construct validity.** The fixtures isolate callback ordering and shared-state behavior, but they simplify token economics, access-control systems, upgradeability, integrations, and transaction composition. A passing Toy invariant demonstrates the intended teaching property only; it does not measure the complete security of an NFT protocol.
+
+**Internal validity.** The same project authors created most fixtures, rules, adapters, and labels. Holdouts reduce direct case-specific tuning, but the dataset and DSL still share design assumptions. Candidate reason codes are human judgments and remain reviewable hypotheses, except where a bounded local counterexample directly demonstrates the path.
+
+**External validity.** Six small cases cannot represent all Solidity, ERC-721, ERC-1155, marketplace, lending, or authorization designs. Results must not be generalized to public contracts, real wallets, live addresses, market conditions, or assets.
+
+**Static-analysis limitations.** The AST analysis intentionally does not prove callback reachability, modifier semantics, caller identity, ownership transitions, argument satisfiability, mapping-key aliasing, or mutually exclusive state conditions. These gaps explain the retained static-only candidates and the two documented false-positive controls.
+
+**Dynamic-analysis limitations.** Tests use a small set of deterministic bounded parameters on an ephemeral Hardhat chain. They do not perform symbolic execution, fuzz an unbounded state space, simulate mempool behavior, or establish economic profitability. Absence of a local counterexample is not evidence that a path is safe.
+
+**Reproducibility limitations.** The lockfile, tool versions, frozen-engine hashes, expected summary, and CI reduce accidental drift, but future operating-system, compiler, package-registry, or runner changes may still affect installation. Generated timestamps are not part of the expected metric comparison.
+
+**Safety and ethical boundary.** No public RPC, private key, wallet, live contract address, deployment, or real asset is used. The project is a defensive local teaching artifact and does not provide a workflow for real financial transactions.
+
+## 7. Definition of a More Complete Study
 
 The project would be reasonably complete as a reproducible defensive research prototype when all of the following are true:
 
@@ -112,14 +132,14 @@ The project would be reasonably complete as a reproducible defensive research pr
 - every case has a vulnerable fixture, a fixed fixture, an explicit invariant, bounded parameters, and a reviewer-approved expected result;
 - the generic executor contains no case or contract names, and most holdouts run without executor changes;
 - safe negative controls are included and the report presents false positives and false negatives rather than only successful detections;
-- every static candidate is classified as locally demonstrated, static-only, or intentionally rejected with a recorded reason;
+- every static candidate is classified as locally demonstrated, static-only, or intentionally rejected with a recorded reason (implemented for 23/23 current candidates in Stage 6);
 - a clean checkout reproduces the same tests and summary metrics with the documented `pnpm verify:ci` command (implemented in Stage 5);
 - schemas, safety rejection tests, development/holdout provenance, and generated-report formats are versioned;
 - the report clearly limits conclusions to local Toy contracts and never generalizes the results to real assets or production exploitability.
 
 Meeting these criteria would make the work a credible teaching and research prototype. A production auditor would still require broader Solidity semantics, larger independently curated datasets, stronger interprocedural and alias analysis, systematic state-space exploration, and external validation.
 
-## 7. Minimal Reproduction
+## 8. Minimal Reproduction
 
 Requirements: Node.js 22+ and pnpm 12.4.1.
 
@@ -141,15 +161,16 @@ The current verified result is:
 - 6 bound business-invariant rules: 3 development and 3 holdouts;
 - 26 generated local scenarios: 13 vulnerable and 13 fixed;
 - 23 unmitigated static review candidates;
-- 6 precisely bound candidates with local counterexamples and 17 static-only candidates;
+- 6 precisely bound candidates with local counterexamples, 15 static-only candidates, and 2 intentionally rejected Toy controls;
+- 23/23 static candidates have a compatible reviewer disposition and reason code;
 - 15 hand-labeled evaluation paths: 6 true positives, 2 false positives, 0 false negatives, and 7 true negatives;
 - 75% precision, 100% recall, and 77.8% specificity on the labeled paths;
 - 12/12 dynamic ground-truth checks passed, 3/3 holdouts required no executor change, and frozen-engine drift is zero;
-- 66 passing tests in the complete suite, including reproducibility drift and safety-boundary rejection tests;
+- 68 passing tests in the complete suite, including candidate-review completeness, reproducibility drift, and safety-boundary rejection tests;
 - the generated JSON and offline HTML reports match `evaluation/expected-summary.json`.
 
-## 8. Conclusion
+## 9. Conclusion
 
 All six dynamic cases share the same underlying cause: critical business state remains incomplete or stale when control is transferred to an external NFT receiver callback. A robust fix generally combines the Checks-Effects-Interactions pattern, a cross-function reentrancy guard, and explicit business-invariant tests.
 
-The immediate next step is Stage 6: improve negative-control classification and document threats to validity, while keeping the frozen engine and Stage 5 reproducibility contract unchanged.
+The next step is a final packaging and independent-review stage: preserve the frozen engine, verify the candidate labels on a blinded sample, and produce matching Markdown and LaTeX summaries from the versioned local-only results.

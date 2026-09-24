@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 1,
+  "localOnly": true,
+  "reviews": [
+    {
+      "path": { "contract": "AuthorizationVaultVulnerable", "outerFunction": "claimPrimary", "candidateFunction": "claimPrimary" },
+      "disposition": "static-only",
+      "reasonCode": "no-reviewed-local-scenario",
+      "rationale": "The current adapter demonstrates claimAdditional reentry, not recursive claimPrimary; this exact path needs a separate bounded local scenario."
+    },
+    {
+      "path": { "contract": "AuthorizationVaultVulnerable", "outerFunction": "claimPrimary", "candidateFunction": "authorize" },
+      "disposition": "static-only",
+      "reasonCode": "state-index-alias-unproven",
+      "rationale": "The structural match does not establish that callback arguments target the same approvedClaimer mapping key used by the outer call."
+    },
+    {
+      "path": { "contract": "AuthorizationVaultVulnerable", "outerFunction": "claimPrimary", "candidateFunction": "claimAdditional" },
+      "disposition": "locally-demonstrated",
+      "reasonCode": "local-counterexample",
+      "rationale": "A bounded local callback test observes a second Toy NFT claim while the temporary authorization remains active."
+    },
+    {
+      "path": { "contract": "BatchVoucherVulnerable", "outerFunction": "distributePair", "candidateFunction": "distributePair" },
+      "disposition": "static-only",
+      "reasonCode": "no-reviewed-local-scenario",
+      "rationale": "The reviewed adapter exercises claimBonus, not recursive distributePair, so this exact path has no local counterexample."
+    },
+    {
+      "path": { "contract": "BatchVoucherVulnerable", "outerFunction": "distributePair", "candidateFunction": "claimBonus" },
+      "disposition": "locally-demonstrated",
+      "reasonCode": "local-counterexample",
+      "rationale": "A bounded local ERC-1155 batch callback test observes Toy voucher balance exceeding recorded credit."
+    },
+    {
+      "path": { "contract": "PermissionedCallbackControl", "outerFunction": "deliver", "candidateFunction": "deliver" },
+      "disposition": "intentionally-rejected",
+      "reasonCode": "state-index-or-ownership-blocked",
+      "rationale": "The transferred Toy NFT has left the control before the callback, while another token ID addresses a different finalized mapping slot."
+    },
+    {
+      "path": { "contract": "PermissionedCallbackControl", "outerFunction": "deliver", "candidateFunction": "adminCancel" },
+      "disposition": "intentionally-rejected",
+      "reasonCode": "authorization-blocked",
+      "rationale": "The local callback receiver cannot satisfy the admin-only check; this is a deliberate structural false-positive control."
+    },
+    {
+      "path": { "contract": "HypeBearsVulnerable", "outerFunction": "mintNFT", "candidateFunction": "mintNFT" },
+      "disposition": "locally-demonstrated",
+      "reasonCode": "local-counterexample",
+      "rationale": "A bounded local ERC-721 callback test observes the one-time Toy NFT mint entitlement being reused."
+    },
+    {
+      "path": { "contract": "MarketplaceVulnerable", "outerFunction": "buy", "candidateFunction": "buy" },
+      "disposition": "static-only",
+      "reasonCode": "callback-reachability-unproven",
+      "rationale": "The analyzer does not prove that a recursive buy can satisfy current Toy NFT ownership and transfer preconditions."
+    },
+    {
+      "path": { "contract": "MarketplaceVulnerable", "outerFunction": "buy", "candidateFunction": "refundListing" },
+      "disposition": "locally-demonstrated",
+      "reasonCode": "local-counterexample",
+      "rationale": "A bounded local callback test observes one Toy Token listing bond being returned twice."
+    },
+    {
+      "path": { "contract": "MarketplaceVulnerable", "outerFunction": "buy", "candidateFunction": "list" },
+      "disposition": "static-only",
+      "reasonCode": "callback-reachability-unproven",
+      "rationale": "The structural match does not prove that callback-time ownership, approval, and receiver conditions permit this list path."
+    },
+    {
+      "path": { "contract": "OmniPoolVulnerable", "outerFunction": "withdraw", "candidateFunction": "withdraw" },
+      "disposition": "static-only",
+      "reasonCode": "authorization-unproven",
+      "rationale": "Callback entry changes msg.sender, and the analyzer does not prove that the receiver controls qualifying collateral for recursive withdrawal."
+    },
+    {
+      "path": { "contract": "OmniPoolVulnerable", "outerFunction": "withdraw", "candidateFunction": "liquidate" },
+      "disposition": "locally-demonstrated",
+      "reasonCode": "local-counterexample",
+      "rationale": "A bounded local callback test observes liquidation changing Toy NFT collateral state during withdrawal."
+    },
+    {
+      "path": { "contract": "OmniPoolVulnerable", "outerFunction": "withdraw", "candidateFunction": "supply" },
+      "disposition": "static-only",
+      "reasonCode": "state-prerequisites-unproven",
+      "rationale": "A shared-state match does not prove that callback-time Toy NFT ownership and approval satisfy supply preconditions."
+    },
+    {
+      "path": { "contract": "OmniPoolVulnerable", "outerFunction": "liquidate", "candidateFunction": "withdraw" },
+      "disposition": "static-only",
+      "reasonCode": "authorization-unproven",
+      "rationale": "The analyzer does not prove that the callback receiver is the collateral owner required by withdraw."
+    },
+    {
+      "path": { "contract": "OmniPoolVulnerable", "outerFunction": "liquidate", "candidateFunction": "liquidate" },
+      "disposition": "static-only",
+      "reasonCode": "no-reviewed-local-scenario",
+      "rationale": "The current adapter demonstrates withdraw-to-liquidate reentry and does not exercise recursive liquidation."
+    },
+    {
+      "path": { "contract": "OmniPoolVulnerable", "outerFunction": "liquidate", "candidateFunction": "supply" },
+      "disposition": "static-only",
+      "reasonCode": "state-prerequisites-unproven",
+      "rationale": "The structural analyzer does not establish callback-time Toy NFT ownership and approval for supply."
+    },
+    {
+      "path": { "contract": "OmniPoolVulnerable", "outerFunction": "withdraw", "candidateFunction": "borrow" },
+      "disposition": "static-only",
+      "reasonCode": "state-prerequisites-unproven",
+      "rationale": "The analyzer does not prove that the callback receiver has sufficient recorded collateral to borrow."
+    },
+    {
+      "path": { "contract": "OmniPoolVulnerable", "outerFunction": "liquidate", "candidateFunction": "borrow" },
+      "disposition": "static-only",
+      "reasonCode": "state-prerequisites-unproven",
+      "rationale": "The analyzer does not prove that the callback receiver has sufficient recorded collateral to borrow."
+    },
+    {
+      "path": { "contract": "RevestVulnerable", "outerFunction": "createSeries", "candidateFunction": "createSeries" },
+      "disposition": "static-only",
+      "reasonCode": "no-reviewed-local-scenario",
+      "rationale": "The reviewed adapter demonstrates depositAdditionalToFNFT reentry, not recursive createSeries."
+    },
+    {
+      "path": { "contract": "RevestVulnerable", "outerFunction": "createSeries", "candidateFunction": "depositAdditionalToFNFT" },
+      "disposition": "locally-demonstrated",
+      "reasonCode": "local-counterexample",
+      "rationale": "A bounded local ERC-1155 callback test observes stale identifier reuse and excess Toy Token payout."
+    },
+    {
+      "path": { "contract": "RevestVulnerable", "outerFunction": "depositAdditionalToFNFT", "candidateFunction": "createSeries" },
+      "disposition": "static-only",
+      "reasonCode": "no-reviewed-local-scenario",
+      "rationale": "No reviewed bounded local scenario currently exercises createSeries from this callback path."
+    },
+    {
+      "path": { "contract": "RevestVulnerable", "outerFunction": "depositAdditionalToFNFT", "candidateFunction": "depositAdditionalToFNFT" },
+      "disposition": "static-only",
+      "reasonCode": "no-reviewed-local-scenario",
+      "rationale": "No reviewed bounded local scenario currently exercises recursive depositAdditionalToFNFT."
+    }
+  ]
+}

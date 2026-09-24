@@ -44,7 +44,6 @@ const naturalLanguageText = readLocalSource(coverageReport?.source);
 const declaredCoverage = coverageReport?.ruleCoverage ?? [];
 const uniqueBindings = (field) => new Set(declaredCoverage.flatMap((rule) => rule.scope?.[field] ?? [])).size;
 const declaredAssumptions = declaredCoverage.reduce((total, rule) => total + (rule.assumptions?.length ?? 0), 0);
-const demonstratedPaths = coverageReport?.candidates?.filter((item) => item.evidenceLevel === "local-demonstration").length ?? 0;
 const digest = crypto
   .createHash("sha256")
   .update(JSON.stringify(rules))
@@ -126,9 +125,9 @@ const payload = {
         detail: "程序自动扫描回调点、共享状态和跨函数候选；声明式执行器只运行通过 schema 和注册表校验的本地 Adapter。Agent 仍需结合规则、权限与可达性解释结果，静态候选不等于已证明可利用。",
         metrics: [
           { label: "静态候选", value: String(coverageReport?.summary?.staticCandidates ?? 0) },
-          { label: "规则已覆盖", value: String(coverageReport?.summary?.coveredCandidates ?? 0), tone: "good" },
-          { label: "规则未覆盖", value: String(coverageReport?.summary?.undeclaredCandidates ?? 0), tone: "bad" },
-          { label: "本地演示路径", value: String(demonstratedPaths) },
+          { label: "已人工复核", value: String(coverageReport?.summary?.reviewedCandidates ?? 0), tone: "good" },
+          { label: "仍需本地验证", value: String(coverageReport?.summary?.staticOnlyCandidates ?? 0) },
+          { label: "有理由排除", value: String(coverageReport?.summary?.intentionallyRejectedCandidates ?? 0) },
         ],
       },
       {
@@ -153,12 +152,12 @@ const payload = {
         status: "automatic",
         statusLabel: "程序自动",
         artifact: "analysis/rule-coverage-report.json",
-        detail: "结果区分已声明规则、规则外候选、本地已演示与仅静态候选，并保留证据和下一步验证方向。",
+        detail: "结果区分已声明规则、规则外候选、本地已演示、仅静态候选和有理由排除的教学负样本，并保留人工 reason code。",
         metrics: [
           { label: "动态规则", value: String(report.summary.rules) },
           { label: "测试场景", value: String(report.summary.scenarios) },
           { label: "符合预期", value: `${report.summary.passed} / ${report.summary.scenarios}`, tone: "good" },
-          { label: "规则外本地演示", value: String(coverageReport?.summary?.locallyDemonstratedUndeclared ?? 0), tone: "bad" },
+          { label: "已复核候选", value: `${coverageReport?.summary?.reviewedCandidates ?? 0} / ${coverageReport?.summary?.staticCandidates ?? 0}`, tone: "good" },
         ],
       },
       {
