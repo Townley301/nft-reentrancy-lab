@@ -41,7 +41,70 @@ Stage 2 replaces the three hard-coded dynamic test branches with declarative JSO
 
 The three original adapters form the development set. The marketplace bond rule is a holdout: supporting it required a new Toy fixture, one unified rule, and one adapter configuration, but no marketplace-specific executor logic. This is evidence that the current DSL generalizes to one additional ERC-721 cross-function callback pattern; it is not a claim of universal contract coverage.
 
-## 4. Minimal Reproduction
+## 4. What the Workflow Now Accomplishes
+
+The implemented workflow is:
+
+```text
+Researcher-written business invariant
+        ↓
+Agent inspection and semantic binding to contracts, functions, and state
+        ↓
+Unified rule specification with development/holdout provenance
+        ↓
+Schema and cross-field validation
+        ↓
+Local AST callback/shared-state candidate analysis
+        ↓
+Reviewed declarative adapter executed on an ephemeral Hardhat chain
+        ↓
+Vulnerable/fixed comparison under the same bounded parameters
+        ↓
+Evidence correlation and JSON, Markdown, and offline HTML reports
+```
+
+This workflow currently completes five useful tasks:
+
+1. It preserves the researcher's prose while creating an auditable semantic binding to exact local code identifiers.
+2. It separates a static review hypothesis from a locally demonstrated invariant violation, avoiding the claim that an AST pattern alone proves exploitability.
+3. It generates deterministic vulnerable/fixed regression scenarios from reviewed data rather than executing arbitrary model-generated code.
+4. It distinguishes development cases from holdouts, allowing limited measurement of whether the adapter DSL generalizes beyond the cases used to shape it.
+5. It enforces a local-only safety boundary: ephemeral Hardhat state, project-defined Toy assets, bounded parameters, and no public RPC, wallet, private key, live address, or real-asset operation.
+
+The workflow does not yet automatically understand arbitrary prose, synthesize a safe adapter for every contract, prove reachability, or establish production exploitability. Unsupported rules remain static-only until a reviewer supplies an appropriate local fixture and adapter.
+
+## 5. Next Research Work
+
+The next stage should evaluate the frozen workflow rather than immediately add more executor features.
+
+1. Freeze the current adapter schema and generic executor as the Stage 2 baseline.
+2. Add at least two structurally different holdouts that were not used to design that baseline:
+   - an ERC-1155 batch-callback accounting or identifier-consistency case;
+   - an authorization or role-transition case in which callback reentry changes who may perform an action.
+3. Add negative controls: callback-containing contracts that are intentionally safe, plus static candidates that are unreachable because of permissions or state preconditions.
+4. Create a hand-reviewed ground-truth manifest for every expected callback path and expected evidence level.
+5. Measure path coverage, false positives, false negatives, unsupported-adapter rate, and whether each holdout required a schema/runtime change.
+6. Add clean-install continuous integration that runs rule generation, all tests, coverage correlation, safety checks, and report generation from an empty build directory.
+7. Document limitations and threats to validity, especially the small synthetic dataset, simplified Toy contracts, bounded parameter search, AST aliasing limits, and the difference between local evidence and real-protocol security conclusions.
+
+If a holdout requires a new DSL operation, that operation should first be isolated, schema-validated, negatively tested, and reported as a workflow extension. The same case should not then be counted as untouched holdout evidence.
+
+## 6. Definition of a More Complete Study
+
+The project would be reasonably complete as a reproducible defensive research prototype when all of the following are true:
+
+- the dataset contains at least three development cases and three or more untouched holdouts across ERC-721 and ERC-1155, same-function and cross-function reentry, and more than one invariant category;
+- every case has a vulnerable fixture, a fixed fixture, an explicit invariant, bounded parameters, and a reviewer-approved expected result;
+- the generic executor contains no case or contract names, and most holdouts run without executor changes;
+- safe negative controls are included and the report presents false positives and false negatives rather than only successful detections;
+- every static candidate is classified as locally demonstrated, static-only, or intentionally rejected with a recorded reason;
+- a clean checkout reproduces the same tests and summary metrics with one documented command;
+- schemas, safety rejection tests, development/holdout provenance, and generated-report formats are versioned;
+- the report clearly limits conclusions to local Toy contracts and never generalizes the results to real assets or production exploitability.
+
+Meeting these criteria would make the work a credible teaching and research prototype. A production auditor would still require broader Solidity semantics, larger independently curated datasets, stronger interprocedural and alias analysis, systematic state-space exploration, and external validation.
+
+## 7. Minimal Reproduction
 
 Requirements: Node.js 22+ and pnpm 10+.
 
@@ -69,8 +132,8 @@ The current verified result is:
 - 0 candidates outside the declared rule scopes;
 - 53 passing tests in the complete suite.
 
-## 5. Conclusion
+## 8. Conclusion
 
 All four cases share the same underlying cause: critical business state remains incomplete or stale when control is transferred to an external NFT receiver callback. A robust fix generally combines the Checks-Effects-Interactions pattern, a cross-function reentrancy guard, and explicit business-invariant tests.
 
-The next research step should add a second, structurally different holdout—preferably an ERC-1155 batch or authorization-transition invariant—and measure adapter coverage, false positives, and unsupported DSL requirements without tuning the executor against the holdout before evaluation.
+The immediate next step is to freeze the Stage 2 engine, add the two independent holdouts and safe negative controls described above, and evaluate them against a hand-reviewed ground truth before changing the DSL.
