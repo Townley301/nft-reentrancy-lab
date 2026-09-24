@@ -41,6 +41,8 @@ The adapter may use only the expression and operation types allowed by its schem
 
 Treat holdout labels as research provenance. If executor behavior or the DSL is changed after examining a holdout, disclose that change and do not present the same case as an untouched holdout result.
 
+For benchmark work, `evaluation/ground-truth.json` is the hand-reviewed evaluation source. It records frozen engine hashes, exact positive and negative paths, expected local outcomes, and acceptance thresholds. Do not alter labels merely to improve measured precision or recall; document analyzer limitations through negative controls.
+
 ## Coverage interpretation
 
 The deterministic coverage analyzer matches declared scopes against AST callback candidates and obtains adapter-to-path mappings from the same specification. A match means the declared rule touches the same contract/function/state area; it does not prove the rule itself is complete.

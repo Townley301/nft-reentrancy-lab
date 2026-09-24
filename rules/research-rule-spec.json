@@ -230,6 +230,61 @@
           "fixed": "preserve"
         }
       }
+    },
+    {
+      "id": "batch-vouchers-within-credit",
+      "dataset": "holdout",
+      "statement": "The total Toy ERC-1155 voucher balance delivered in a batch and its callback must not exceed the receiver's recorded credit.",
+      "expected": "preserve",
+      "scope": {
+        "contracts": ["BatchVoucherVulnerable", "BatchVoucherFixed"],
+        "functions": ["distributePair", "onERC1155BatchReceived", "claimBonus"],
+        "states": ["credits", "balanceOf", "callbacks", "reentrySucceeded"]
+      },
+      "model": {
+        "actors": ["receiver", "voucher-vault", "batch-token"],
+        "preconditions": [
+          "The local teaching vault holds enough Toy ERC-1155 units for both batch entries.",
+          "The receiver begins with zero recorded credit and zero voucher balances.",
+          "The receiver can request the local bonus path from the ERC-1155 batch callback."
+        ],
+        "actions": [
+          { "phase": "entry", "actor": "receiver", "function": "distributePair" },
+          { "phase": "callback", "actor": "batch-token", "function": "onERC1155BatchReceived" },
+          { "phase": "reentry", "actor": "receiver", "function": "claimBonus" }
+        ],
+        "observables": ["credits", "balanceOf", "callbacks", "reentrySucceeded"],
+        "invariant": {
+          "category": "consistency",
+          "relation": "lte",
+          "statement": "sum of receiver voucher balances <= receiver recorded credit"
+        }
+      },
+      "bindingConfidence": "high",
+      "assumptions": [
+        "The batch fixture uses token IDs 1 and 2 for the pair and token ID 3 for the callback bonus."
+      ],
+      "evidenceRequired": ["static-state-conflict", "local-counterexample", "regression-confirmed"],
+      "dynamic": {
+        "adapter": "batch-credit",
+        "path": {
+          "contract": "BatchVoucherVulnerable",
+          "outerFunction": "distributePair",
+          "reentryFunction": "claimBonus"
+        },
+        "variants": {
+          "vulnerableContract": "BatchVoucherVulnerable",
+          "fixedContract": "BatchVoucherFixed"
+        },
+        "parameters": [
+          { "amount": 2 },
+          { "amount": 4 }
+        ],
+        "expectations": {
+          "vulnerable": "violate",
+          "fixed": "preserve"
+        }
+      }
     }
   ]
 }

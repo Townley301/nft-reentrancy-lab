@@ -12,6 +12,7 @@ const PROJECT_ROOT = path.resolve(SCRIPT_DIR, "..");
 const RULES_PATH = path.join(PROJECT_ROOT, "rules", "research-rule-spec.json");
 const REPORT_PATH = path.join(PROJECT_ROOT, "analysis", "business-rule-report.json");
 const COVERAGE_PATH = path.join(PROJECT_ROOT, "analysis", "rule-coverage-report.json");
+const EVALUATION_PATH = path.join(PROJECT_ROOT, "analysis", "ground-truth-evaluation.json");
 const TEMPLATE_PATH = path.join(PROJECT_ROOT, "viewer", "business-rule-template.html");
 const OUTPUT_PATH = path.join(PROJECT_ROOT, "business-rule-report.html");
 
@@ -26,6 +27,9 @@ const rules = validateRules(readJson(RULES_PATH, "业务规则文件"));
 const report = readJson(REPORT_PATH, "业务规则验证报告");
 const coverageReport = fs.existsSync(COVERAGE_PATH)
   ? JSON.parse(fs.readFileSync(COVERAGE_PATH, "utf8"))
+  : undefined;
+const evaluationReport = fs.existsSync(EVALUATION_PATH)
+  ? JSON.parse(fs.readFileSync(EVALUATION_PATH, "utf8"))
   : undefined;
 
 function readLocalSource(source) {
@@ -60,6 +64,7 @@ const payload = {
   safetyBoundary: report.safetyBoundary,
   summary: report.summary,
   coverage: coverageReport,
+  evaluation: evaluationReport,
   workflow: {
     command: "pnpm audit:agent",
     automaticThrough: "result",
@@ -124,6 +129,21 @@ const payload = {
           { label: "规则已覆盖", value: String(coverageReport?.summary?.coveredCandidates ?? 0), tone: "good" },
           { label: "规则未覆盖", value: String(coverageReport?.summary?.undeclaredCandidates ?? 0), tone: "bad" },
           { label: "本地演示路径", value: String(demonstratedPaths) },
+        ],
+      },
+      {
+        id: "evaluate",
+        title: "Ground truth 评估",
+        actor: "标注集 + 程序",
+        status: evaluationReport?.acceptance?.passed ? "automatic" : "mixed",
+        statusLabel: evaluationReport?.acceptance?.passed ? "基线通过" : "需要复核",
+        artifact: "analysis/ground-truth-evaluation.json",
+        detail: "程序只在人工标注的本地路径上计算 precision、recall、specificity 和动态通过率，并检查通用执行器是否偏离冻结 baseline。已知误报会保留在结果中。",
+        metrics: [
+          { label: "Precision", value: evaluationReport ? `${(evaluationReport.metrics.precision * 100).toFixed(1)}%` : "未生成" },
+          { label: "Recall", value: evaluationReport ? `${(evaluationReport.metrics.recall * 100).toFixed(1)}%` : "未生成" },
+          { label: "Specificity", value: evaluationReport ? `${(evaluationReport.metrics.specificity * 100).toFixed(1)}%` : "未生成" },
+          { label: "Baseline 漂移", value: String(evaluationReport?.metrics?.baselineDriftFiles ?? "未生成"), tone: evaluationReport?.metrics?.baselineDriftFiles === 0 ? "good" : "bad" },
         ],
       },
       {

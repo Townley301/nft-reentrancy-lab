@@ -10,4 +10,7 @@ An FNFT receiver must not redeem more value than it actually funded, even when a
 Holdout business rule — marketplace bond conservation:
 A listing bond must be returned at most once. This must remain true when the seller is also the ERC-721 receiver and calls the refund path from the NFT transfer callback.
 
-These rules describe business invariants rather than attack steps. The first three rules form the development set; the marketplace rule is a holdout used to test whether the generic adapter engine can execute a new case without a case-specific branch. The Agent binds the rules to exact local contract, function, and state identifiers in research-rule-spec.json; deterministic programs validate and execute only reviewed bounded adapters.
+Holdout business rule — batch voucher credit consistency:
+The total balance of Toy ERC-1155 vouchers delivered to a receiver in a batch and its callback must not exceed that receiver's recorded credit.
+
+These rules describe business invariants rather than attack steps. The first three rules form the development set; the marketplace and batch-voucher rules are holdouts used to test whether the frozen generic adapter engine can execute new cases without case-specific branches. The Agent binds the rules to exact local contract, function, and state identifiers in research-rule-spec.json; deterministic programs validate and execute only reviewed bounded adapters.

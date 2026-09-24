@@ -19,7 +19,7 @@ function hasPath(paths, outerFunction, candidateFunction, state) {
   );
 }
 
-test("finds the four deliberately vulnerable teaching patterns", () => {
+test("finds the five deliberately vulnerable teaching patterns", () => {
   const report = analyzeProject(root);
 
   assert.equal(
@@ -43,6 +43,10 @@ test("finds the four deliberately vulnerable teaching patterns", () => {
     hasPath(candidates(report, "MarketplaceVulnerable"), "buy", "refundListing", "listings"),
     true,
   );
+  assert.equal(
+    hasPath(candidates(report, "BatchVoucherVulnerable"), "distributePair", "claimBonus", "credits"),
+    true,
+  );
 });
 
 test("does not raise the same post-callback ordering candidates for fixed contracts", () => {
@@ -52,6 +56,7 @@ test("does not raise the same post-callback ordering candidates for fixed contra
     "OmniPoolFixed",
     "RevestFixed",
     "MarketplaceFixed",
+    "BatchVoucherFixed",
   ]) {
     assert.equal(
       candidates(report, contractName).some((candidate) => candidate.severity !== "mitigated"),
@@ -59,6 +64,16 @@ test("does not raise the same post-callback ordering candidates for fixed contra
       `${contractName} unexpectedly contains an unmitigated candidate`,
     );
   }
+});
+
+test("keeps safe and permission-limited controls visible as evaluation controls", () => {
+  const report = analyzeProject(root);
+
+  assert.equal(candidates(report, "SafeCallbackControl").length, 0);
+  assert.equal(
+    hasPath(candidates(report, "PermissionedCallbackControl"), "deliver", "adminCancel", "finalized"),
+    true,
+  );
 });
 
 test("records the local-only safety boundary", () => {

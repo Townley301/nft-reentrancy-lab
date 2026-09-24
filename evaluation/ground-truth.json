@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "localOnly": true,
+  "baseline": {
+    "id": "stage-2-declarative-adapter-engine",
+    "commit": "0f2f275",
+    "frozenFiles": [
+      {
+        "path": "rules/adapters/adapter-spec.schema.json",
+        "sha256": "190018992b5ee69248f3b2786efc45ea9e63b69fe577273c1df1e4196bfb1d36"
+      },
+      {
+        "path": "scripts/lib/adapter-spec.mjs",
+        "sha256": "57c9003dbb4dee412d9a1dc4fb31e6588d7aa0318dfb5040cec761f4594408f3"
+      },
+      {
+        "path": "test/support/callback-rule-runtime.ts",
+        "sha256": "35c3eab312391a7602d3e74b70356d7d053c58c6c3e9627d57fc2c0cd7ea90ce"
+      }
+    ]
+  },
+  "acceptance": {
+    "minimumPrecision": 0.7,
+    "minimumRecall": 1,
+    "minimumSpecificity": 0.75,
+    "minimumDynamicPassRate": 1,
+    "maximumBaselineDriftFiles": 0
+  },
+  "holdouts": [
+    {
+      "ruleId": "marketplace-bond-returned-once",
+      "adapter": "marketplace-bond",
+      "executorChanged": false
+    },
+    {
+      "ruleId": "batch-vouchers-within-credit",
+      "adapter": "batch-credit",
+      "executorChanged": false
+    }
+  ],
+  "cases": [
+    {
+      "id": "hypebears-vulnerable",
+      "dataset": "development",
+      "kind": "positive",
+      "path": { "contract": "HypeBearsVulnerable", "outerFunction": "mintNFT", "candidateFunction": "mintNFT" },
+      "expectedStatic": "candidate",
+      "dynamic": { "ruleId": "one-mint-per-address", "variant": "vulnerable", "expectedOutcome": "violate" },
+      "rationale": "The callback can reuse the one-time mint entitlement before it is consumed."
+    },
+    {
+      "id": "hypebears-fixed",
+      "dataset": "development",
+      "kind": "negative",
+      "path": { "contract": "HypeBearsFixed", "outerFunction": "mintNFT", "candidateFunction": "mintNFT" },
+      "expectedStatic": "absent",
+      "dynamic": { "ruleId": "one-mint-per-address", "variant": "fixed", "expectedOutcome": "preserve" },
+      "rationale": "The entitlement is consumed before the callback."
+    },
+    {
+      "id": "omni-vulnerable",
+      "dataset": "development",
+      "kind": "positive",
+      "path": { "contract": "OmniPoolVulnerable", "outerFunction": "withdraw", "candidateFunction": "liquidate" },
+      "expectedStatic": "candidate",
+      "dynamic": { "ruleId": "collateral-covers-debt", "variant": "vulnerable", "expectedOutcome": "violate" },
+      "rationale": "Liquidation can mutate collateral state during the withdrawal callback."
+    },
+    {
+      "id": "omni-fixed",
+      "dataset": "development",
+      "kind": "negative",
+      "path": { "contract": "OmniPoolFixed", "outerFunction": "withdraw", "candidateFunction": "liquidate" },
+      "expectedStatic": "absent",
+      "dynamic": { "ruleId": "collateral-covers-debt", "variant": "fixed", "expectedOutcome": "preserve" },
+      "rationale": "The fixed path rejects an unhealthy withdrawal before transferring the NFT."
+    },
+    {
+      "id": "revest-vulnerable",
+      "dataset": "development",
+      "kind": "positive",
+      "path": { "contract": "RevestVulnerable", "outerFunction": "createSeries", "candidateFunction": "depositAdditionalToFNFT" },
+      "expectedStatic": "candidate",
+      "dynamic": { "ruleId": "payout-within-funded-value", "variant": "vulnerable", "expectedOutcome": "violate" },
+      "rationale": "The stale series identifier can be reused from the ERC-1155 callback."
+    },
+    {
+      "id": "revest-fixed",
+      "dataset": "development",
+      "kind": "negative",
+      "path": { "contract": "RevestFixed", "outerFunction": "createSeries", "candidateFunction": "depositAdditionalToFNFT" },
+      "expectedStatic": "absent",
+      "dynamic": { "ruleId": "payout-within-funded-value", "variant": "fixed", "expectedOutcome": "preserve" },
+      "rationale": "The fixed path reserves the identifier before the callback."
+    },
+    {
+      "id": "marketplace-vulnerable",
+      "dataset": "holdout",
+      "kind": "positive",
+      "path": { "contract": "MarketplaceVulnerable", "outerFunction": "buy", "candidateFunction": "refundListing" },
+      "expectedStatic": "candidate",
+      "dynamic": { "ruleId": "marketplace-bond-returned-once", "variant": "vulnerable", "expectedOutcome": "violate" },
+      "rationale": "The listing remains refundable during the ERC-721 receiver callback."
+    },
+    {
+      "id": "marketplace-fixed",
+      "dataset": "holdout",
+      "kind": "negative",
+      "path": { "contract": "MarketplaceFixed", "outerFunction": "buy", "candidateFunction": "refundListing" },
+      "expectedStatic": "absent",
+      "dynamic": { "ruleId": "marketplace-bond-returned-once", "variant": "fixed", "expectedOutcome": "preserve" },
+      "rationale": "The fixed path closes the listing before the callback."
+    },
+    {
+      "id": "batch-voucher-vulnerable",
+      "dataset": "holdout",
+      "kind": "positive",
+      "path": { "contract": "BatchVoucherVulnerable", "outerFunction": "distributePair", "candidateFunction": "claimBonus" },
+      "expectedStatic": "candidate",
+      "dynamic": { "ruleId": "batch-vouchers-within-credit", "variant": "vulnerable", "expectedOutcome": "violate" },
+      "rationale": "The receiver can claim a bonus before the pair credit is assigned, after which the outer call overwrites the credit."
+    },
+    {
+      "id": "batch-voucher-fixed",
+      "dataset": "holdout",
+      "kind": "negative",
+      "path": { "contract": "BatchVoucherFixed", "outerFunction": "distributePair", "candidateFunction": "claimBonus" },
+      "expectedStatic": "absent",
+      "dynamic": { "ruleId": "batch-vouchers-within-credit", "variant": "fixed", "expectedOutcome": "preserve" },
+      "rationale": "The complete credit is assigned before the ERC-1155 batch callback."
+    },
+    {
+      "id": "safe-ordering-control",
+      "dataset": "control",
+      "kind": "negative",
+      "path": { "contract": "SafeCallbackControl", "outerFunction": "deliver", "candidateFunction": "resetForAnotherLesson" },
+      "expectedStatic": "absent",
+      "dynamic": null,
+      "rationale": "The control finalizes state before the ERC-721 callback and performs no relevant state access afterward."
+    },
+    {
+      "id": "permission-limited-control",
+      "dataset": "control",
+      "kind": "negative",
+      "path": { "contract": "PermissionedCallbackControl", "outerFunction": "deliver", "candidateFunction": "adminCancel" },
+      "expectedStatic": "absent",
+      "dynamic": null,
+      "rationale": "The callback receiver cannot satisfy the admin-only authorization check; a structural detector is expected to expose this known false positive."
+    },
+    {
+      "id": "transferred-token-control",
+      "dataset": "control",
+      "kind": "negative",
+      "path": { "contract": "PermissionedCallbackControl", "outerFunction": "deliver", "candidateFunction": "deliver" },
+      "expectedStatic": "absent",
+      "dynamic": null,
+      "rationale": "The same Toy NFT has already left the control before the callback, and a different token ID would write a different mapping slot; the structural detector does not model either condition."
+    }
+  ]
+}

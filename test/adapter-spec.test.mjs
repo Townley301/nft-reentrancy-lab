@@ -10,12 +10,15 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-test("loads three development adapters and one independent holdout adapter", () => {
+test("loads three development adapters and two independent holdout adapters", () => {
   const adapters = [...loadAdapterRegistry().values()];
 
   assert.equal(adapters.filter((adapter) => adapter.dataset === "development").length, 3);
-  assert.equal(adapters.filter((adapter) => adapter.dataset === "holdout").length, 1);
-  assert.equal(adapters.find((adapter) => adapter.dataset === "holdout")?.id, "marketplace-bond");
+  assert.equal(adapters.filter((adapter) => adapter.dataset === "holdout").length, 2);
+  assert.deepEqual(
+    adapters.filter((adapter) => adapter.dataset === "holdout").map((adapter) => adapter.id).sort(),
+    ["batch-credit", "marketplace-bond"],
+  );
 });
 
 test("rejects executable fields and references outside declared deployments", () => {

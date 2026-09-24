@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "id": "batch-credit",
+  "dataset": "holdout",
+  "description": "ERC-1155 batch voucher balances must not exceed the receiver's recorded credit.",
+  "callbackStandard": "ERC1155",
+  "binding": {
+    "path": { "contract": "BatchVoucherVulnerable", "outerFunction": "distributePair", "reentryFunction": "claimBonus" },
+    "variants": { "vulnerableContract": "BatchVoucherVulnerable", "fixedContract": "BatchVoucherFixed" }
+  },
+  "parameterBounds": {
+    "amount": { "minimum": 1, "maximum": 10 }
+  },
+  "deployments": [
+    { "id": "token", "contract": "ToyBatchERC1155", "constructorArgs": [] },
+    {
+      "id": "vault",
+      "contract": { "vulnerable": "BatchVoucherVulnerable", "fixed": "BatchVoucherFixed" },
+      "constructorArgs": [{ "kind": "contract", "id": "token" }]
+    },
+    {
+      "id": "receiver",
+      "contract": "BatchVoucherCallbackStudent",
+      "constructorArgs": [{ "kind": "contract", "id": "vault" }]
+    }
+  ],
+  "setup": [
+    { "target": "token", "function": "issueUnchecked", "args": [{ "kind": "contract", "id": "vault" }, { "kind": "uint", "value": "1" }, { "kind": "uint", "value": "100" }] },
+    { "target": "token", "function": "issueUnchecked", "args": [{ "kind": "contract", "id": "vault" }, { "kind": "uint", "value": "2" }, { "kind": "uint", "value": "100" }] }
+  ],
+  "entry": {
+    "target": "receiver",
+    "function": "runLesson",
+    "args": [{ "kind": "param", "name": "amount" }]
+  },
+  "observations": [
+    { "id": "balance-one", "target": "token", "function": "balanceOf", "args": [{ "kind": "contract", "id": "receiver" }, { "kind": "uint", "value": "1" }] },
+    { "id": "balance-two", "target": "token", "function": "balanceOf", "args": [{ "kind": "contract", "id": "receiver" }, { "kind": "uint", "value": "2" }] },
+    { "id": "balance-bonus", "target": "token", "function": "balanceOf", "args": [{ "kind": "contract", "id": "receiver" }, { "kind": "uint", "value": "3" }] },
+    { "id": "recorded-credit", "target": "vault", "function": "credits", "args": [{ "kind": "contract", "id": "receiver" }] },
+    { "id": "callbacks", "target": "receiver", "function": "callbacks", "args": [] },
+    { "id": "reentry-succeeded", "target": "receiver", "function": "reentrySucceeded", "args": [] }
+  ],
+  "assertion": {
+    "operator": "lte",
+    "left": {
+      "kind": "add",
+      "left": { "kind": "add", "left": { "kind": "observation", "id": "balance-one" }, "right": { "kind": "observation", "id": "balance-two" } },
+      "right": { "kind": "observation", "id": "balance-bonus" }
+    },
+    "right": { "kind": "observation", "id": "recorded-credit" }
+  }
+}

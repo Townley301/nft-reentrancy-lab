@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ground-truth.schema.json",
+  "title": "Local callback research ground truth",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "localOnly", "baseline", "acceptance", "holdouts", "cases"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "localOnly": { "const": true },
+    "baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "commit", "frozenFiles"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+        "frozenFiles": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "sha256"],
+            "properties": {
+              "path": { "type": "string", "minLength": 1 },
+              "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+            }
+          }
+        }
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimumPrecision", "minimumRecall", "minimumSpecificity", "minimumDynamicPassRate", "maximumBaselineDriftFiles"],
+      "properties": {
+        "minimumPrecision": { "type": "number", "minimum": 0, "maximum": 1 },
+        "minimumRecall": { "type": "number", "minimum": 0, "maximum": 1 },
+        "minimumSpecificity": { "type": "number", "minimum": 0, "maximum": 1 },
+        "minimumDynamicPassRate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "maximumBaselineDriftFiles": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "holdouts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ruleId", "adapter", "executorChanged"],
+        "properties": {
+          "ruleId": { "$ref": "#/$defs/id" },
+          "adapter": { "$ref": "#/$defs/id" },
+          "executorChanged": { "type": "boolean" }
+        }
+      }
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/case" }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" },
+    "identifier": { "type": "string", "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$" },
+    "path": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contract", "outerFunction", "candidateFunction"],
+      "properties": {
+        "contract": { "$ref": "#/$defs/identifier" },
+        "outerFunction": { "$ref": "#/$defs/identifier" },
+        "candidateFunction": { "$ref": "#/$defs/identifier" }
+      }
+    },
+    "dynamic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ruleId", "variant", "expectedOutcome"],
+      "properties": {
+        "ruleId": { "$ref": "#/$defs/id" },
+        "variant": { "enum": ["vulnerable", "fixed"] },
+        "expectedOutcome": { "enum": ["violate", "preserve"] }
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "dataset", "kind", "path", "expectedStatic", "dynamic", "rationale"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "dataset": { "enum": ["development", "holdout", "control"] },
+        "kind": { "enum": ["positive", "negative"] },
+        "path": { "$ref": "#/$defs/path" },
+        "expectedStatic": { "enum": ["candidate", "absent"] },
+        "dynamic": { "oneOf": [{ "$ref": "#/$defs/dynamic" }, { "type": "null" }] },
+        "rationale": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

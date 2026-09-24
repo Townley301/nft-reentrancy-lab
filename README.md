@@ -1,11 +1,12 @@
 # NFT Callback Reentrancy Local Lab
 
-一个完全在本地运行的 NFT 回调重入教学项目，对三个历史案例的**核心逻辑**进行最小化模拟，并使用一个独立 marketplace 案例检验工作流的泛化能力：
+一个完全在本地运行的 NFT 回调重入教学项目，对三个历史案例的**核心逻辑**进行最小化模拟，并使用两个独立 holdout 检验工作流的泛化能力：
 
 1. HypeBears：ERC-721 `_safeMint` 回调导致同函数重入；
 2. OMNI Protocol：ERC-721 转账回调进入另一条清算函数；
 3. Revest Finance：ERC-1155 铸造回调读取过期的 FNFT 编号。
 4. Marketplace holdout：ERC-721 接收回调进入退款路径，使同一笔 Toy Token listing bond 被重复返还。
+5. Batch voucher holdout：ERC-1155 batch callback 在 credit 记录完成前进入 bonus 路径，使 Toy voucher 数量超过记录额度。
 
 本项目不是原协议复刻，也不包含真实攻击所需的主网地址、RPC、私钥、闪电贷、价格操纵或资产兑换代码。所有交易都发生在一次性的 Hardhat 本地内存链上，只涉及项目内的 Toy NFT 和 Toy Token；它没有连接、部署或交易真实资产的能力。
 
@@ -37,6 +38,7 @@ pnpm analyze
 pnpm verify:v2
 pnpm verify:rules
 pnpm audit:agent
+pnpm evaluate:ground-truth
 ```
 
 ## 第一阶段：统一的不变量驱动审计流程
@@ -86,7 +88,7 @@ Agent 负责理解自然语言、检查源码、拆分复合规则、记录假�
 
 ### 第二阶段：声明式 Adapter 与留出案例
 
-第二阶段把原来写在测试运行器中的三个案例分支拆成 `rules/adapters/*.json`。`test/support/callback-rule-runtime.ts` 现在是一个通用执行器，只解释以下受限操作：按名称部署本地合约、按顺序调用函数、读取观察值，以及执行 `eq` / `lte` / `gte` 与整数加减乘表达式。它不包含 HypeBears、OMNI、Revest 或 Marketplace 的名称和专用分支，也不执行 Adapter 提供的任意代码。
+第二阶段把原来写在测试运行器中的三个案例分支拆成 `rules/adapters/*.json`。`test/support/callback-rule-runtime.ts` 现在是一个通用执行器，只解释以下受限操作：按名称部署本地合约、按顺序调用函数、读取观察值，以及执行 `eq` / `lte` / `gte` 与整数加减乘表达式。它不包含 HypeBears、OMNI、Revest、Marketplace 或 Batch voucher 的名称和专用分支，也不执行 Adapter 提供的任意代码。
 
 Adapter 的权威格式在 `rules/adapters/adapter-spec.schema.json`，程序级跨字段校验在 `scripts/lib/adapter-spec.mjs`。每个 Adapter 必须声明：
 
@@ -104,8 +106,20 @@ Adapter 的权威格式在 `rules/adapters/adapter-spec.schema.json`，程序级
 | development | OMNI | Toy debt 不超过剩余 Toy NFT 抵押能力 | 3 | 6 |
 | development | Revest | Toy Token 支出不超过调用者实际投入 | 3 | 6 |
 | holdout | Marketplace | 同一笔 Toy listing bond 最多返还一次 | 2 | 4 |
+| holdout | Batch voucher | Toy ERC-1155 voucher 总量不超过记录 credit | 2 | 4 |
 
-当前完整验证结果：4 条规则生成 18 个本地动态场景，漏洞版均观察到预期的不变量破坏，修复版均保持不变量；静态分析列出 16 条未缓解审查候选，其中 4 条精确绑定路径已有本地动态反例，另外 12 条仍明确标记为仅静态证据，未声明候选为 0。完整测试共 53 项通过。这里的“规则已覆盖”不等于“路径已证明可利用”，留出案例通过也只是当前受限 DSL 的一次泛化证据，而不是对任意合约的通用保证。
+### 第三阶段：冻结基线、Ground truth 与负样本
+
+第三阶段将 Stage 2 的 Adapter schema、校验器和通用执行器按 commit 与 SHA-256 固定为 baseline，然后在不修改这三个文件的前提下加入第二个 holdout。基线、人工标签和阈值位于 `evaluation/ground-truth.json`，格式定义在 `evaluation/ground-truth.schema.json`。
+
+本阶段还加入两个完全本地的安全控制合约：
+
+- `SafeCallbackControl` 在 ERC-721 callback 前完成状态更新，静态分析不应报告对应路径；
+- `PermissionedCallbackControl` 用来暴露当前结构分析器不理解 admin 权限、token ownership 和 mapping key 区分的限制。
+
+`pnpm evaluate:ground-truth` 只在人工标注路径上计算 precision、recall、specificity、动态结果通过率和 baseline 漂移。当前结果不是“全都正确”：13 条标注路径中有 5 个 true positives、2 个 false positives、0 个 false negatives 和 6 个 true negatives；precision 为 71.4%，recall 为 100%，specificity 为 75%。10/10 个带动态预期的漏洞版/修复版检查通过，2/2 个 holdout 均未修改冻结执行器，baseline 漂移为 0。
+
+当前完整验证结果：5 条规则生成 22 个本地动态场景；静态分析列出 20 条未缓解审查候选，其中 5 条精确绑定路径已有本地动态反例，15 条仍明确标记为仅静态证据。2 条规则外候选来自刻意加入的权限负样本，并在 ground truth 中记录为已知误报。完整测试共 60 项通过。这里的“规则已覆盖”不等于“路径已证明可利用”，holdout 通过也只是当前受限 DSL 的局部泛化证据。
 
 新增本地教学案例时，通常只需添加：
 
@@ -130,7 +144,8 @@ pnpm audit:agent
 2. 在 Hardhat 临时内存链上运行漏洞版和修复版场景；
 3. 编译 Solidity 并执行 callback/shared-state 静态分析；
 4. 将声明规则与静态候选关联；
-5. 生成机器可读、Markdown 和离线 HTML 报告。
+5. 对人工标注路径计算误报、漏报、动态结果和 baseline 漂移；
+6. 生成机器可读、Markdown 和离线 HTML 报告。
 
 主要输出为：
 
@@ -138,6 +153,7 @@ pnpm audit:agent
 - `analysis/business-rule-report.md`：动态预期/观察对照；
 - `analysis/shared-state-report.json` 和 `.md`：静态 callback/shared-state 候选；
 - `analysis/rule-coverage-report.json` 和 `.md`：规则覆盖、未声明候选和证据级别；
+- `analysis/ground-truth-evaluation.json` 和 `.md`：人工标注集上的误报、漏报、动态结果和 baseline 漂移；
 - `business-rule-report.html`：可交互的离线可视化报告，可直接双击打开。
 
 这些均为可再生输出，已被 `.gitignore` 排除。如果只需验证动态适配器或重新生成页面，可以分别运行：
@@ -223,6 +239,12 @@ pnpm node
 
 修复版：`buy` 在发送 Toy NFT 之前关闭 listing 并返还一次 bond。接收回调中的退款尝试失败，最终余额不超过投入。这个案例完全在本地构造，不对应真实 marketplace、真实订单或真实财产交易。
 
+### Batch voucher holdout
+
+漏洞版：本地 vault 向 receiver 批量发送 token ID 1 和 2。ERC-1155 batch callback 在 `credits` 仍为零时领取 ID 3 的 Toy bonus；外层调用返回后把 credit 覆盖为 pair 数量，因此最终 Toy voucher 总量高于记录 credit。
+
+修复版：vault 在 batch transfer 前写入完整 credit，callback 中的 bonus 请求失败，Toy voucher 总量与记录 credit 一致。该场景只使用本地教学 token，不包含真实 NFT、市场或财产交易。
+
 ## 项目结构
 
 ```text
@@ -231,7 +253,9 @@ pnpm node
 ├── agents/openai.yaml
 └── references/rule-spec.md
 contracts/
+├── batch/BatchVoucherLab.sol
 ├── common/ToyAssets.sol
+├── controls/CallbackControls.sol
 ├── hypebears/HypeBearsLab.sol
 ├── marketplace/MarketplaceLab.sol
 ├── omni/OmniLab.sol
@@ -239,6 +263,7 @@ contracts/
 rules/
 ├── adapters/
 │   ├── adapter-spec.schema.json
+│   ├── batch-credit.json
 │   ├── collateral-coverage.json
 │   ├── funded-value.json
 │   ├── marketplace-bond.json
@@ -251,15 +276,20 @@ scripts/
 ├── analyze-shared-state.mjs
 ├── audit-rule-coverage.mjs
 ├── generate-callback-tests.mjs
+├── evaluate-ground-truth.mjs
 └── lib/
     ├── adapter-spec.mjs
     └── research-rule-spec.mjs
 test/
 ├── adapter-spec.test.mjs
+├── ground-truth-evaluator.test.mjs
 ├── reentrancy-lab.ts
 ├── business-invariants.ts
 └── support/callback-rule-runtime.ts
 REPORT.md
+evaluation/
+├── ground-truth.json
+└── ground-truth.schema.json
 ```
 
 每个动态案例均包含：
