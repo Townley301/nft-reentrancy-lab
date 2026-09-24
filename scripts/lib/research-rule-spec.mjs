@@ -1,20 +1,6 @@
 import path from "node:path";
+import { loadAdapterRegistry, validateAdapterParameters } from "./adapter-spec.mjs";
 
-const ADAPTERS = new Set(["one-time-mint", "collateral-coverage", "funded-value"]);
-const ADAPTER_BINDINGS = {
-  "one-time-mint": {
-    path: { contract: "HypeBearsVulnerable", outerFunction: "mintNFT", reentryFunction: "mintNFT" },
-    variants: { vulnerableContract: "HypeBearsVulnerable", fixedContract: "HypeBearsFixed" },
-  },
-  "collateral-coverage": {
-    path: { contract: "OmniPoolVulnerable", outerFunction: "withdraw", reentryFunction: "liquidate" },
-    variants: { vulnerableContract: "OmniPoolVulnerable", fixedContract: "OmniPoolFixed" },
-  },
-  "funded-value": {
-    path: { contract: "RevestVulnerable", outerFunction: "createSeries", reentryFunction: "depositAdditionalToFNFT" },
-    variants: { vulnerableContract: "RevestVulnerable", fixedContract: "RevestFixed" },
-  },
-};
 const OUTCOMES = new Set(["preserve", "violate"]);
 const PHASES = new Set(["setup", "entry", "callback", "reentry", "assertion"]);
 const CATEGORIES = new Set(["uniqueness", "solvency", "conservation", "authorization", "consistency"]);
@@ -75,37 +61,12 @@ function identifierList(value, label) {
   value.forEach((item) => identifier(item, label));
 }
 
-function boundedInteger(value, minimum, maximum, label) {
-  if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
-    fail(`${label} must be an integer from ${minimum} to ${maximum}`);
-  }
-}
-
-function validateParameters(adapter, parameters, label) {
-  if (!Array.isArray(parameters) || parameters.length === 0 || parameters.length > 12) {
-    fail(`${label}.parameters must contain 1 to 12 bounded cases`);
-  }
-  for (const [index, item] of parameters.entries()) {
-    const itemLabel = `${label}.parameters[${index}]`;
-    if (!object(item)) fail(`${itemLabel} must be an object`);
-    if (adapter === "one-time-mint") {
-      onlyKeys(item, [], itemLabel);
-    } else if (adapter === "collateral-coverage") {
-      onlyKeys(item, ["borrowAmount"], itemLabel);
-      boundedInteger(item.borrowAmount, 11, 20, `${itemLabel}.borrowAmount`);
-    } else {
-      onlyKeys(item, ["outerQuantity", "depositPerUnit", "additionalQuantity"], itemLabel);
-      boundedInteger(item.outerQuantity, 1, 10, `${itemLabel}.outerQuantity`);
-      boundedInteger(item.depositPerUnit, 1, 5, `${itemLabel}.depositPerUnit`);
-      boundedInteger(item.additionalQuantity, 1, 3, `${itemLabel}.additionalQuantity`);
-    }
-  }
-}
-
 function validateDynamic(dynamic, rule, label) {
   if (!object(dynamic)) fail(`${label}.dynamic must be an object`);
   onlyKeys(dynamic, ["adapter", "path", "variants", "parameters", "expectations"], `${label}.dynamic`);
-  if (!ADAPTERS.has(dynamic.adapter)) fail(`${label}.dynamic.adapter is not a supported callback adapter`);
+  const adapter = loadAdapterRegistry().get(dynamic.adapter);
+  if (adapter === undefined) fail(`${label}.dynamic.adapter is not a reviewed callback adapter`);
+  if (adapter.dataset !== rule.dataset) fail(`${label}.dataset must match the adapter dataset`);
 
   if (!object(dynamic.path)) fail(`${label}.dynamic.path must be an object`);
   onlyKeys(dynamic.path, ["contract", "outerFunction", "reentryFunction"], `${label}.dynamic.path`);
@@ -118,7 +79,7 @@ function validateDynamic(dynamic, rule, label) {
   identifier(dynamic.variants.vulnerableContract, `${label}.dynamic.variants.vulnerableContract`);
   identifier(dynamic.variants.fixedContract, `${label}.dynamic.variants.fixedContract`);
 
-  const reviewed = ADAPTER_BINDINGS[dynamic.adapter];
+  const reviewed = adapter.binding;
   for (const [field, expected] of Object.entries(reviewed.path)) {
     if (dynamic.path[field] !== expected) fail(`${label}.dynamic.path does not match the reviewed ${dynamic.adapter} adapter`);
   }
@@ -131,7 +92,7 @@ function validateDynamic(dynamic, rule, label) {
   if (!OUTCOMES.has(dynamic.expectations.vulnerable) || !OUTCOMES.has(dynamic.expectations.fixed)) {
     fail(`${label}.dynamic.expectations values must be \`preserve\` or \`violate\``);
   }
-  validateParameters(dynamic.adapter, dynamic.parameters, `${label}.dynamic`);
+  validateAdapterParameters(adapter, dynamic.parameters, `${label}.dynamic.parameters`);
 
   const requiredContracts = [
     dynamic.path.contract,
@@ -176,12 +137,13 @@ export function validateResearchSpec(input) {
     if (!object(rule)) fail(`${label} must be an object`);
     onlyKeys(
       rule,
-      ["id", "statement", "expected", "scope", "model", "bindingConfidence", "assumptions", "evidenceRequired", "dynamic"],
+      ["id", "dataset", "statement", "expected", "scope", "model", "bindingConfidence", "assumptions", "evidenceRequired", "dynamic"],
       label,
     );
     if (typeof rule.id !== "string" || !/^[a-z][a-z0-9-]{2,63}$/.test(rule.id)) fail(`${label}.id is invalid`);
     if (ids.has(rule.id)) fail(`${label}.id is duplicated`);
     ids.add(rule.id);
+    if (!["development", "holdout"].includes(rule.dataset)) fail(`${label}.dataset must be development or holdout`);
     nonEmptyString(rule.statement, `${label}.statement`);
     if (rule.expected !== "preserve") fail(`${label}.expected must be preserve`);
 
@@ -233,8 +195,10 @@ export function runtimeSuite(input) {
   const spec = validateResearchSpec(input);
   const rules = spec.rules.filter((rule) => rule.dynamic !== undefined).map((rule) => ({
     id: rule.id,
+    dataset: rule.dataset,
     description: rule.statement,
     template: rule.dynamic.adapter,
+    adapter: loadAdapterRegistry().get(rule.dynamic.adapter),
     variants: {
       vulnerable: rule.dynamic.variants.vulnerableContract,
       fixed: rule.dynamic.variants.fixedContract,

@@ -13,6 +13,7 @@
   "rules": [
     {
       "id": "one-mint-per-address",
+      "dataset": "development",
       "statement": "One address may consume the minting entitlement once, and one outer call may increase that address's NFT balance by at most one.",
       "expected": "preserve",
       "scope": {
@@ -61,6 +62,7 @@
     },
     {
       "id": "collateral-covers-debt",
+      "dataset": "development",
       "statement": "Outstanding debt must not exceed the borrowing capacity of the borrower's remaining NFT collateral after any callback sequence.",
       "expected": "preserve",
       "scope": {
@@ -118,6 +120,7 @@
     },
     {
       "id": "payout-within-funded-value",
+      "dataset": "development",
       "statement": "The final value redeemed by a callback receiver must not exceed the value that receiver actually funded.",
       "expected": "preserve",
       "scope": {
@@ -165,6 +168,62 @@
           { "outerQuantity": 3, "depositPerUnit": 1, "additionalQuantity": 1 },
           { "outerQuantity": 5, "depositPerUnit": 2, "additionalQuantity": 2 },
           { "outerQuantity": 8, "depositPerUnit": 3, "additionalQuantity": 2 }
+        ],
+        "expectations": {
+          "vulnerable": "violate",
+          "fixed": "preserve"
+        }
+      }
+    },
+    {
+      "id": "marketplace-bond-returned-once",
+      "dataset": "holdout",
+      "statement": "A marketplace listing bond must be returned at most once, including when the seller is also the ERC-721 receiver and reenters the refund path.",
+      "expected": "preserve",
+      "scope": {
+        "contracts": ["MarketplaceVulnerable", "MarketplaceFixed"],
+        "functions": ["list", "prepareAndBuy", "buy", "onERC721Received", "refundListing"],
+        "states": ["listings", "balanceOf", "callbacks", "reentrySucceeded", "listedTokenId"]
+      },
+      "model": {
+        "actors": ["seller-receiver", "marketplace", "nft"],
+        "preconditions": [
+          "The receiver owns a local toy NFT and funds one bounded listing bond.",
+          "The marketplace holds separate toy treasury liquidity so a duplicate refund is observable.",
+          "The seller is also the NFT receiver and can call the refund path during the transfer callback."
+        ],
+        "actions": [
+          { "phase": "setup", "actor": "seller-receiver", "function": "list" },
+          { "phase": "entry", "actor": "seller-receiver", "function": "buy" },
+          { "phase": "callback", "actor": "nft", "function": "onERC721Received" },
+          { "phase": "reentry", "actor": "seller-receiver", "function": "refundListing" }
+        ],
+        "observables": ["listings", "balanceOf", "callbacks", "reentrySucceeded", "listedTokenId"],
+        "invariant": {
+          "category": "conservation",
+          "relation": "lte",
+          "statement": "final receiver bond-token balance <= funded listing bond"
+        }
+      },
+      "bindingConfidence": "high",
+      "assumptions": [
+        "The holdout fixture intentionally allows a seller to buy its own listing to isolate callback ordering."
+      ],
+      "evidenceRequired": ["static-state-conflict", "local-counterexample", "regression-confirmed"],
+      "dynamic": {
+        "adapter": "marketplace-bond",
+        "path": {
+          "contract": "MarketplaceVulnerable",
+          "outerFunction": "buy",
+          "reentryFunction": "refundListing"
+        },
+        "variants": {
+          "vulnerableContract": "MarketplaceVulnerable",
+          "fixedContract": "MarketplaceFixed"
+        },
+        "parameters": [
+          { "tokenId": 1, "bondAmount": 3 },
+          { "tokenId": 2, "bondAmount": 5 }
         ],
         "expectations": {
           "vulnerable": "violate",

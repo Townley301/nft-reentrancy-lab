@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "one-time-mint",
+  "dataset": "development",
+  "description": "One ERC-721 receiver callback must not consume a one-time mint entitlement twice.",
+  "callbackStandard": "ERC721",
+  "binding": {
+    "path": { "contract": "HypeBearsVulnerable", "outerFunction": "mintNFT", "reentryFunction": "mintNFT" },
+    "variants": { "vulnerableContract": "HypeBearsVulnerable", "fixedContract": "HypeBearsFixed" }
+  },
+  "parameterBounds": {},
+  "deployments": [
+    {
+      "id": "target",
+      "contract": { "vulnerable": "HypeBearsVulnerable", "fixed": "HypeBearsFixed" },
+      "constructorArgs": []
+    },
+    {
+      "id": "receiver",
+      "contract": "HypeBearsCallbackStudent",
+      "constructorArgs": [{ "kind": "contract", "id": "target" }]
+    }
+  ],
+  "setup": [],
+  "entry": { "target": "receiver", "function": "runLesson", "args": [] },
+  "observations": [
+    { "id": "final-nft-balance", "target": "target", "function": "balanceOf", "args": [{ "kind": "contract", "id": "receiver" }] },
+    { "id": "callbacks", "target": "receiver", "function": "callbacks", "args": [] },
+    { "id": "reentry-succeeded", "target": "receiver", "function": "reentrySucceeded", "args": [] }
+  ],
+  "assertion": {
+    "operator": "lte",
+    "left": { "kind": "observation", "id": "final-nft-balance" },
+    "right": { "kind": "uint", "value": "1" }
+  }
+}

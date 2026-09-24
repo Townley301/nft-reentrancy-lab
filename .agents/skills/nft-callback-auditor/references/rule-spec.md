@@ -9,6 +9,7 @@ Keep the original prose in the file named by `source.file`. The structured speci
 Each rule contains:
 
 - `id`: stable lowercase identifier.
+- `dataset`: `development` for cases used to shape the workflow, or `holdout` for independently evaluated cases.
 - `statement`: one testable invariant, using the researcher's meaning.
 - `expected`: always `preserve`; a business invariant describes the state that should hold.
 - `scope.contracts`: exact Solidity contract names relevant to the rule.
@@ -24,7 +25,7 @@ Each rule contains:
 - `dynamic`: optional reviewed local adapter, bounded parameters, vulnerable/fixed variants, and the precise static candidate path. Omit it when no reviewed adapter matches.
 - `assumptions`: unresolved interpretation decisions or prerequisites.
 
-The authoritative schema is `rules/research-rule-spec.schema.json`.
+The authoritative rule schema is `rules/research-rule-spec.schema.json`. Dynamic adapter structure is defined separately by `rules/adapters/adapter-spec.schema.json` and validated by `scripts/lib/adapter-spec.mjs`.
 
 ## Binding rules
 
@@ -34,7 +35,11 @@ Split compound prose into separate invariants. For example, “only the owner ma
 
 Every action function and observable must be present in the inspected scope. Set `bindingConfidence` to `high` only when the named contracts, functions, states, callback order, and invariant meaning all match the code. Record ambiguity as an assumption and lower the confidence.
 
-Do not map to a dynamic adapter merely because its name sounds similar. Confirm its fixture, callback sequence, state reads, bounded parameters, candidate path, and invariant formula. A dynamic adapter is a deterministic implementation choice; the model's invariant statement is never evaluated as arbitrary code.
+Do not map to a dynamic adapter merely because its name sounds similar. Confirm its fixture, callback sequence, state reads, bounded parameters, candidate path, dataset, and invariant formula. A dynamic adapter is a deterministic implementation choice; the model's invariant statement is never evaluated as arbitrary code.
+
+The adapter may use only the expression and operation types allowed by its schema. All deployment references must be local and declared, all parameter values must remain inside adapter bounds, and adapter/rule path plus vulnerable/fixed variants must agree exactly. Do not encode case-specific logic in the generic runtime.
+
+Treat holdout labels as research provenance. If executor behavior or the DSL is changed after examining a holdout, disclose that change and do not present the same case as an untouched holdout result.
 
 ## Coverage interpretation
 

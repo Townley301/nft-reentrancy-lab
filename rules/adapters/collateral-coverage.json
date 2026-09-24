@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "id": "collateral-coverage",
+  "dataset": "development",
+  "description": "Debt must remain covered when an ERC-721 withdrawal callback reenters liquidation.",
+  "callbackStandard": "ERC721",
+  "binding": {
+    "path": { "contract": "OmniPoolVulnerable", "outerFunction": "withdraw", "reentryFunction": "liquidate" },
+    "variants": { "vulnerableContract": "OmniPoolVulnerable", "fixedContract": "OmniPoolFixed" }
+  },
+  "parameterBounds": {
+    "borrowAmount": { "minimum": 11, "maximum": 20 }
+  },
+  "deployments": [
+    { "id": "nft", "contract": "ToyERC721", "constructorArgs": [] },
+    { "id": "token", "contract": "ToyERC20", "constructorArgs": [] },
+    {
+      "id": "pool",
+      "contract": { "vulnerable": "OmniPoolVulnerable", "fixed": "OmniPoolFixed" },
+      "constructorArgs": [{ "kind": "contract", "id": "nft" }, { "kind": "contract", "id": "token" }]
+    },
+    {
+      "id": "borrower",
+      "contract": "OmniBorrowerStudent",
+      "constructorArgs": [{ "kind": "contract", "id": "pool" }, { "kind": "contract", "id": "nft" }]
+    },
+    {
+      "id": "receiver",
+      "contract": "OmniLiquidatorCallbackStudent",
+      "constructorArgs": [{ "kind": "contract", "id": "pool" }, { "kind": "contract", "id": "token" }]
+    }
+  ],
+  "setup": [
+    { "target": "nft", "function": "mint", "args": [{ "kind": "contract", "id": "borrower" }, { "kind": "uint", "value": "1" }] },
+    { "target": "nft", "function": "mint", "args": [{ "kind": "contract", "id": "borrower" }, { "kind": "uint", "value": "2" }] },
+    { "target": "token", "function": "mint", "args": [{ "kind": "contract", "id": "pool" }, { "kind": "uint", "value": "100" }] },
+    { "target": "token", "function": "mint", "args": [{ "kind": "contract", "id": "receiver" }, { "kind": "uint", "value": "1" }] },
+    { "target": "borrower", "function": "prepare", "args": [{ "kind": "uint", "value": "1" }, { "kind": "uint", "value": "2" }, { "kind": "param", "name": "borrowAmount" }] },
+    { "target": "receiver", "function": "arm", "args": [{ "kind": "contract", "id": "borrower" }, { "kind": "uint", "value": "2" }] }
+  ],
+  "entry": {
+    "target": "borrower",
+    "function": "startWithdraw",
+    "args": [{ "kind": "uint", "value": "1" }, { "kind": "contract", "id": "receiver" }],
+    "allowRevert": { "vulnerable": false, "fixed": true }
+  },
+  "observations": [
+    { "id": "remaining-collateral", "target": "pool", "function": "collateralCount", "args": [{ "kind": "contract", "id": "borrower" }] },
+    { "id": "remaining-debt", "target": "pool", "function": "debt", "args": [{ "kind": "contract", "id": "borrower" }] },
+    { "id": "callbacks", "target": "receiver", "function": "callbacks", "args": [] },
+    { "id": "reentry-succeeded", "target": "receiver", "function": "reentrySucceeded", "args": [] }
+  ],
+  "assertion": {
+    "operator": "lte",
+    "left": { "kind": "observation", "id": "remaining-debt" },
+    "right": {
+      "kind": "mul",
+      "left": { "kind": "observation", "id": "remaining-collateral" },
+      "right": { "kind": "uint", "value": "10" }
+    }
+  }
+}

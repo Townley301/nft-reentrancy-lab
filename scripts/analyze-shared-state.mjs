@@ -72,7 +72,7 @@ function callbackKind(call) {
   return null;
 }
 
-function newestBuildInfo(root) {
+function buildInfoFiles(root) {
   const directory = path.join(root, "artifacts", "build-info");
   const outputs = fs.readdirSync(directory)
     .filter((name) => name.endsWith(".output.json"))
@@ -81,14 +81,15 @@ function newestBuildInfo(root) {
   if (outputs.length === 0) {
     throw new Error("No Hardhat build-info output found. Run `pnpm compile` first.");
   }
-  const outputPath = path.join(directory, outputs[0].name);
-  const inputPath = outputPath.replace(/\.output\.json$/, ".json");
-  if (!fs.existsSync(inputPath)) throw new Error(`Missing matching compiler input: ${inputPath}`);
-  return { inputPath, outputPath };
+  return outputs.map(({ name }) => {
+    const outputPath = path.join(directory, name);
+    const inputPath = outputPath.replace(/\.output\.json$/, ".json");
+    if (!fs.existsSync(inputPath)) throw new Error(`Missing matching compiler input: ${inputPath}`);
+    return { inputPath, outputPath };
+  });
 }
 
-function buildModel(root) {
-  const { inputPath, outputPath } = newestBuildInfo(root);
+function buildModel(inputPath, outputPath) {
   const inputBundle = JSON.parse(fs.readFileSync(inputPath, "utf8"));
   const outputBundle = JSON.parse(fs.readFileSync(outputPath, "utf8"));
   const input = inputBundle.input;
@@ -393,8 +394,17 @@ function markdownReport(report) {
 }
 
 export function analyzeProject(root = PROJECT_ROOT) {
-  const model = buildModel(root);
-  const contracts = analyzeModel(model);
+  const models = buildInfoFiles(root).map(({ inputPath, outputPath }) =>
+    buildModel(inputPath, outputPath),
+  );
+  const contractsBySource = new Map();
+  for (const model of models) {
+    for (const contract of analyzeModel(model)) {
+      const key = `${contract.file}\0${contract.contract}`;
+      if (!contractsBySource.has(key)) contractsBySource.set(key, contract);
+    }
+  }
+  const contracts = [...contractsBySource.values()];
   const callbackFunctions = contracts.reduce((sum, item) => sum + item.callbackFunctions.length, 0);
   const unmitigatedCandidates = contracts.reduce(
     (sum, item) => sum + item.reentryCandidates.filter((candidate) => candidate.severity !== "mitigated").length,
@@ -403,7 +413,7 @@ export function analyzeProject(root = PROJECT_ROOT) {
   return {
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
-    compiler: model.compiler,
+    compiler: unique(models.map((model) => model.compiler)).join(", "),
     safetyBoundary: {
       source: "仅本地 Hardhat 编译器 AST",
       rpcCalls: false,

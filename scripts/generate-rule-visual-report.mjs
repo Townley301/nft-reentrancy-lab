@@ -118,7 +118,7 @@ const payload = {
         status: "mixed",
         statusLabel: "部分自动",
         artifact: "analysis/shared-state-report.json",
-        detail: "程序自动扫描回调点、共享状态和跨函数候选；动态测试只支持三个已审查适配器。Agent 还需结合规则、权限与可达性解释结果，静态候选不等于已证明可利用。",
+        detail: "程序自动扫描回调点、共享状态和跨函数候选；声明式执行器只运行通过 schema 和注册表校验的本地 Adapter。Agent 仍需结合规则、权限与可达性解释结果，静态候选不等于已证明可利用。",
         metrics: [
           { label: "静态候选", value: String(coverageReport?.summary?.staticCandidates ?? 0) },
           { label: "规则已覆盖", value: String(coverageReport?.summary?.coveredCandidates ?? 0), tone: "good" },
@@ -175,6 +175,7 @@ const payload = {
   },
   rules: rules.rules.filter((rule) => rule.dynamic !== undefined).map((rule) => ({
     id: rule.id,
+    dataset: rule.dataset,
     description: rule.statement,
     template: rule.dynamic.adapter,
     variants: rule.dynamic.variants,

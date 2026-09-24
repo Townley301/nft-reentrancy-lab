@@ -9,6 +9,7 @@ const spec = {
   lab: { name: "coverage lab", description: "test coverage bindings" },
   rules: [{
     id: "one-mint",
+    dataset: "development",
     statement: "one address may mint once",
     expected: "preserve",
     scope: {

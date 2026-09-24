@@ -10,6 +10,7 @@ function validInput() {
     lab: { name: "test lab", description: "bounded local test" },
     rules: [{
       id: "mint-limit",
+      dataset: "development",
       statement: "one mint per address",
       expected: "preserve",
       scope: {
@@ -60,7 +61,7 @@ test("rejects external network and credential fields at any depth", () => {
 test("rejects unknown adapters and out-of-range callback parameters", () => {
   const unknown = validInput();
   unknown.rules[0].dynamic.adapter = "arbitrary-code";
-  assert.throws(() => validateRules(unknown), /supported callback adapter/);
+  assert.throws(() => validateRules(unknown), /reviewed callback adapter/);
 
   const unbounded = validInput();
   unbounded.rules[0].dynamic.adapter = "collateral-coverage";

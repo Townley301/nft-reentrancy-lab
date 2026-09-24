@@ -7,4 +7,7 @@ After any NFT withdrawal, receiver callback, or liquidation sequence, a borrower
 Business rule 3 — funded-value conservation:
 An FNFT receiver must not redeem more value than it actually funded, even when an ERC-1155 receiver callback creates or modifies another series before the outer call finishes.
 
-These rules describe business invariants rather than attack steps. The Agent binds them to exact local contract, function, and state identifiers in research-rule-spec.json; deterministic programs validate and execute only reviewed bounded adapters.
+Holdout business rule — marketplace bond conservation:
+A listing bond must be returned at most once. This must remain true when the seller is also the ERC-721 receiver and calls the refund path from the NFT transfer callback.
+
+These rules describe business invariants rather than attack steps. The first three rules form the development set; the marketplace rule is a holdout used to test whether the generic adapter engine can execute a new case without a case-specific branch. The Agent binds the rules to exact local contract, function, and state identifiers in research-rule-spec.json; deterministic programs validate and execute only reviewed bounded adapters.

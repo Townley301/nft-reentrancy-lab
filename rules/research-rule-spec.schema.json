@@ -135,64 +135,29 @@
       "additionalProperties": false,
       "required": ["adapter", "path", "variants", "parameters", "expectations"],
       "properties": {
-        "adapter": { "enum": ["one-time-mint", "collateral-coverage", "funded-value"] },
+        "adapter": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" },
         "path": { "$ref": "#/$defs/path" },
         "variants": { "$ref": "#/$defs/variants" },
         "parameters": {
           "type": "array",
           "minItems": 1,
           "maxItems": 12,
-          "items": { "type": "object" }
+          "items": {
+            "type": "object",
+            "maxProperties": 12,
+            "additionalProperties": { "type": "integer" }
+          }
         },
         "expectations": { "$ref": "#/$defs/expectations" }
-      },
-      "allOf": [
-        {
-          "if": { "properties": { "adapter": { "const": "one-time-mint" } } },
-          "then": { "properties": { "parameters": { "items": { "type": "object", "maxProperties": 0 } } } }
-        },
-        {
-          "if": { "properties": { "adapter": { "const": "collateral-coverage" } } },
-          "then": {
-            "properties": {
-              "parameters": {
-                "items": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": ["borrowAmount"],
-                  "properties": { "borrowAmount": { "type": "integer", "minimum": 11, "maximum": 20 } }
-                }
-              }
-            }
-          }
-        },
-        {
-          "if": { "properties": { "adapter": { "const": "funded-value" } } },
-          "then": {
-            "properties": {
-              "parameters": {
-                "items": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": ["outerQuantity", "depositPerUnit", "additionalQuantity"],
-                  "properties": {
-                    "outerQuantity": { "type": "integer", "minimum": 1, "maximum": 10 },
-                    "depositPerUnit": { "type": "integer", "minimum": 1, "maximum": 5 },
-                    "additionalQuantity": { "type": "integer", "minimum": 1, "maximum": 3 }
-                  }
-                }
-              }
-            }
-          }
-        }
-      ]
+      }
     },
     "rule": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "statement", "expected", "scope", "model", "bindingConfidence", "assumptions", "evidenceRequired"],
+      "required": ["id", "dataset", "statement", "expected", "scope", "model", "bindingConfidence", "assumptions", "evidenceRequired"],
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" },
+        "dataset": { "enum": ["development", "holdout"] },
         "statement": { "type": "string", "minLength": 1 },
         "expected": { "const": "preserve" },
         "scope": { "$ref": "#/$defs/scope" },

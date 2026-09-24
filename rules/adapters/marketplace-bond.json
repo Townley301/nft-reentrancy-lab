@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "id": "marketplace-bond",
+  "dataset": "holdout",
+  "description": "A marketplace receiver callback must not refund the same listing bond twice.",
+  "callbackStandard": "ERC721",
+  "binding": {
+    "path": { "contract": "MarketplaceVulnerable", "outerFunction": "buy", "reentryFunction": "refundListing" },
+    "variants": { "vulnerableContract": "MarketplaceVulnerable", "fixedContract": "MarketplaceFixed" }
+  },
+  "parameterBounds": {
+    "tokenId": { "minimum": 1, "maximum": 10 },
+    "bondAmount": { "minimum": 1, "maximum": 10 }
+  },
+  "deployments": [
+    { "id": "nft", "contract": "ToyERC721", "constructorArgs": [] },
+    { "id": "bond-token", "contract": "ToyERC20", "constructorArgs": [] },
+    {
+      "id": "market",
+      "contract": { "vulnerable": "MarketplaceVulnerable", "fixed": "MarketplaceFixed" },
+      "constructorArgs": [{ "kind": "contract", "id": "nft" }, { "kind": "contract", "id": "bond-token" }]
+    },
+    {
+      "id": "receiver",
+      "contract": "MarketplaceCallbackStudent",
+      "constructorArgs": [{ "kind": "contract", "id": "market" }, { "kind": "contract", "id": "nft" }, { "kind": "contract", "id": "bond-token" }]
+    }
+  ],
+  "setup": [
+    { "target": "nft", "function": "mint", "args": [{ "kind": "contract", "id": "receiver" }, { "kind": "param", "name": "tokenId" }] },
+    { "target": "bond-token", "function": "mint", "args": [{ "kind": "contract", "id": "market" }, { "kind": "uint", "value": "100" }] },
+    { "target": "bond-token", "function": "mint", "args": [{ "kind": "contract", "id": "receiver" }, { "kind": "param", "name": "bondAmount" }] }
+  ],
+  "entry": {
+    "target": "receiver",
+    "function": "prepareAndBuy",
+    "args": [{ "kind": "param", "name": "tokenId" }, { "kind": "param", "name": "bondAmount" }]
+  },
+  "observations": [
+    { "id": "final-bond-balance", "target": "bond-token", "function": "balanceOf", "args": [{ "kind": "contract", "id": "receiver" }] },
+    { "id": "market-bond-balance", "target": "bond-token", "function": "balanceOf", "args": [{ "kind": "contract", "id": "market" }] },
+    { "id": "callbacks", "target": "receiver", "function": "callbacks", "args": [] },
+    { "id": "reentry-succeeded", "target": "receiver", "function": "reentrySucceeded", "args": [] }
+  ],
+  "assertion": {
+    "operator": "lte",
+    "left": { "kind": "observation", "id": "final-bond-balance" },
+    "right": { "kind": "param", "name": "bondAmount" }
+  }
+}

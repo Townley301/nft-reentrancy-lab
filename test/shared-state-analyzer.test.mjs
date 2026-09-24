@@ -19,7 +19,7 @@ function hasPath(paths, outerFunction, candidateFunction, state) {
   );
 }
 
-test("finds the three deliberately vulnerable teaching patterns", () => {
+test("finds the four deliberately vulnerable teaching patterns", () => {
   const report = analyzeProject(root);
 
   assert.equal(
@@ -39,11 +39,20 @@ test("finds the three deliberately vulnerable teaching patterns", () => {
     ),
     true,
   );
+  assert.equal(
+    hasPath(candidates(report, "MarketplaceVulnerable"), "buy", "refundListing", "listings"),
+    true,
+  );
 });
 
 test("does not raise the same post-callback ordering candidates for fixed contracts", () => {
   const report = analyzeProject(root);
-  for (const contractName of ["HypeBearsFixed", "OmniPoolFixed", "RevestFixed"]) {
+  for (const contractName of [
+    "HypeBearsFixed",
+    "OmniPoolFixed",
+    "RevestFixed",
+    "MarketplaceFixed",
+  ]) {
     assert.equal(
       candidates(report, contractName).some((candidate) => candidate.severity !== "mitigated"),
       false,

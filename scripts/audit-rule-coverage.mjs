@@ -79,6 +79,7 @@ export function analyzeCoverage(specInput, staticReport, dynamicReport) {
     const proof = dynamicEvidence(dynamicReport, rule.dynamic?.adapter);
     return {
       id: rule.id,
+      dataset: rule.dataset,
       statement: rule.statement,
       scope: rule.scope,
       model: rule.model,
@@ -113,6 +114,8 @@ export function analyzeCoverage(specInput, staticReport, dynamicReport) {
     },
     summary: {
       declaredRules: spec.rules.length,
+      developmentRules: spec.rules.filter((rule) => rule.dataset === "development").length,
+      holdoutRules: spec.rules.filter((rule) => rule.dataset === "holdout").length,
       staticCandidates: candidates.length,
       coveredCandidates: candidates.length - undeclared.length,
       undeclaredCandidates: undeclared.length,
@@ -131,6 +134,8 @@ function markdown(report) {
     "",
     `- 输入：${report.source.title}（${report.source.file}）`,
     `- 已声明规则：${report.summary.declaredRules}`,
+    `- 开发集规则：${report.summary.developmentRules}`,
+    `- Holdout 规则：${report.summary.holdoutRules}`,
     `- 静态回调候选：${report.summary.staticCandidates}`,
     `- 规则未覆盖候选：${report.summary.undeclaredCandidates}`,
     `- 已有本地动态证据的候选路径：${report.summary.locallyDemonstratedCandidates}`,
@@ -141,11 +146,11 @@ function markdown(report) {
     "",
     "## 研究者声明规则",
     "",
-    "| 规则 | 类别 | 绑定置信度 | 状态 | 命中的静态路径 | 本地动态场景 |",
-    "|---|---|---|---|---:|---:|",
+    "| 数据集 | 规则 | 类别 | 绑定置信度 | 状态 | 命中的静态路径 | 本地动态场景 |",
+    "|---|---|---|---|---|---:|---:|",
   ];
   for (const rule of report.ruleCoverage) {
-    lines.push(`| ${rule.id} | ${rule.model.invariant.category} | ${rule.bindingConfidence} | ${rule.status} | ${rule.matchedCandidates.length} | ${rule.dynamicEvidence?.scenarios ?? 0} |`);
+    lines.push(`| ${rule.dataset} | ${rule.id} | ${rule.model.invariant.category} | ${rule.bindingConfidence} | ${rule.status} | ${rule.matchedCandidates.length} | ${rule.dynamicEvidence?.scenarios ?? 0} |`);
   }
   lines.push("", "## 规则未覆盖的候选路径", "");
   const undeclared = report.candidates.filter((item) => item.coverage === "undeclared");

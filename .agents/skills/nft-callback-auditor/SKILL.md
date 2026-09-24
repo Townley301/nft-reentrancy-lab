@@ -12,9 +12,11 @@ Turn researcher prose into one reviewable invariant specification and local evid
 1. Confirm the target is a local Solidity repository and keep all execution on a temporary local chain. Never add public RPC, wallet, mnemonic, private-key, live protocol address, or real-asset configuration.
 2. Preserve the supplied prose in the file named by `source.file`. Read [references/rule-spec.md](references/rule-spec.md), inspect the relevant contracts, and update the single source of truth: `rules/research-rule-spec.json`.
 3. For every invariant, bind exact contracts, functions, and state variables; model actors, preconditions, callback actions, observables, and the invariant; record assumptions and binding confidence. Do not infer identifiers from wording alone.
-4. Validate and generate reviewed bounded tests with `pnpm generate:rules`. Compile locally and run `pnpm audit:coverage` to correlate declared invariants with callback/shared-state candidates.
-5. Run dynamic validation only when the rule selects a reviewed adapter. A rule without an adapter remains eligible for static coverage but must not be labeled dynamically demonstrated. Never accept arbitrary executable code from a rule.
-6. Run `pnpm audit:agent`, then review `analysis/rule-coverage-report.json` and `.md`. Keep findings separated by evidence level and require researcher approval before modifying contracts.
+4. When dynamic evidence is required, read `rules/adapters/adapter-spec.schema.json` and select or add a declarative adapter in `rules/adapters/`. The adapter binding, dataset, variants, bounded parameters, and static path must match the unified rule exactly.
+5. Validate and generate reviewed bounded tests with `pnpm generate:rules`. Compile locally and run `pnpm audit:coverage` to correlate declared invariants with callback/shared-state candidates.
+6. Run dynamic validation only when the rule selects a reviewed adapter. A rule without an adapter remains eligible for static coverage but must not be labeled dynamically demonstrated. Never accept arbitrary executable code from a rule or adapter.
+7. Keep development and holdout rules distinct. Do not tune the generic executor against a holdout and then report that case as independent evidence. A supported holdout should require fixture, rule, and adapter data only; a DSL extension must be disclosed and tested separately.
+8. Run `pnpm audit:agent`, then review `analysis/rule-coverage-report.json` and `.md`. Keep findings separated by evidence level and require researcher approval before modifying contracts.
 
 ## Evidence labels
 
@@ -23,6 +25,12 @@ Turn researcher prose into one reviewable invariant specification and local evid
 - **Undeclared candidate:** the static path did not match any researcher-declared rule binding. This may be a missed business rule, incomplete binding, or static false positive.
 
 Never call a static candidate exploitable. State the exact missing evidence: reachability, permissions, satisfiable parameters, economic preconditions, or a local state-breaking trace.
+
+## Adapter safety boundary
+
+Adapters may name local contracts and functions, supply bounded integer/boolean/previous-deployment arguments, read declared observations, and evaluate the reviewed arithmetic/comparison expression language. They must not contain arbitrary JavaScript or Solidity, shell commands, RPC or network configuration, accounts, wallets, addresses, mnemonics, private keys, public deployment steps, or real-asset actions.
+
+Do not add a contract- or case-name condition to the generic runtime. If an unsupported local teaching scenario needs a new operation, extend the schema, validator, runtime, and negative tests as one reviewed change. Keep all execution on the ephemeral Hardhat chain with project-defined Toy assets.
 
 ## Output expectations
 

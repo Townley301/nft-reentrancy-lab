@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "id": "funded-value",
+  "dataset": "development",
+  "description": "FNFT redemption must not exceed the value funded during an ERC-1155 callback sequence.",
+  "callbackStandard": "ERC1155",
+  "binding": {
+    "path": { "contract": "RevestVulnerable", "outerFunction": "createSeries", "reentryFunction": "depositAdditionalToFNFT" },
+    "variants": { "vulnerableContract": "RevestVulnerable", "fixedContract": "RevestFixed" }
+  },
+  "parameterBounds": {
+    "outerQuantity": { "minimum": 1, "maximum": 10 },
+    "depositPerUnit": { "minimum": 1, "maximum": 5 },
+    "additionalQuantity": { "minimum": 1, "maximum": 3 }
+  },
+  "deployments": [
+    { "id": "asset", "contract": "ToyERC20", "constructorArgs": [] },
+    { "id": "fnft", "contract": "ToyERC1155", "constructorArgs": [] },
+    {
+      "id": "protocol",
+      "contract": { "vulnerable": "RevestVulnerable", "fixed": "RevestFixed" },
+      "constructorArgs": [{ "kind": "contract", "id": "asset" }, { "kind": "contract", "id": "fnft" }]
+    },
+    {
+      "id": "receiver",
+      "contract": "RevestCallbackStudent",
+      "constructorArgs": [{ "kind": "contract", "id": "protocol" }, { "kind": "contract", "id": "asset" }, { "kind": "contract", "id": "fnft" }]
+    }
+  ],
+  "setup": [
+    { "target": "asset", "function": "mint", "args": [{ "kind": "contract", "id": "protocol" }, { "kind": "uint", "value": "100" }] },
+    {
+      "target": "asset",
+      "function": "mint",
+      "args": [
+        { "kind": "contract", "id": "receiver" },
+        { "kind": "mul", "left": { "kind": "param", "name": "depositPerUnit" }, "right": { "kind": "param", "name": "additionalQuantity" } }
+      ]
+    }
+  ],
+  "entry": {
+    "target": "receiver",
+    "function": "runLessonWithParameters",
+    "args": [
+      { "kind": "param", "name": "outerQuantity" },
+      { "kind": "param", "name": "depositPerUnit" },
+      { "kind": "param", "name": "additionalQuantity" }
+    ]
+  },
+  "observations": [
+    { "id": "final-balance", "target": "asset", "function": "balanceOf", "args": [{ "kind": "contract", "id": "receiver" }] },
+    { "id": "outer-series-id", "target": "receiver", "function": "createdId", "args": [] },
+    { "id": "callback-series-id", "target": "receiver", "function": "additionalId", "args": [] },
+    { "id": "reentry-succeeded", "target": "receiver", "function": "reentrySucceeded", "args": [] }
+  ],
+  "assertion": {
+    "operator": "lte",
+    "left": { "kind": "observation", "id": "final-balance" },
+    "right": {
+      "kind": "mul",
+      "left": { "kind": "param", "name": "depositPerUnit" },
+      "right": { "kind": "param", "name": "additionalQuantity" }
+    }
+  }
+}

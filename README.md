@@ -1,12 +1,13 @@
 # NFT Callback Reentrancy Local Lab
 
-一个完全在本地运行的 NFT 回调重入教学项目，对三个历史案例的**核心逻辑**进行最小化模拟：
+一个完全在本地运行的 NFT 回调重入教学项目，对三个历史案例的**核心逻辑**进行最小化模拟，并使用一个独立 marketplace 案例检验工作流的泛化能力：
 
 1. HypeBears：ERC-721 `_safeMint` 回调导致同函数重入；
 2. OMNI Protocol：ERC-721 转账回调进入另一条清算函数；
 3. Revest Finance：ERC-1155 铸造回调读取过期的 FNFT 编号。
+4. Marketplace holdout：ERC-721 接收回调进入退款路径，使同一笔 Toy Token listing bond 被重复返还。
 
-本项目不是原协议复刻，也不包含真实攻击所需的主网地址、RPC、私钥、闪电贷、价格操纵或资产兑换代码。
+本项目不是原协议复刻，也不包含真实攻击所需的主网地址、RPC、私钥、闪电贷、价格操纵或资产兑换代码。所有交易都发生在一次性的 Hardhat 本地内存链上，只涉及项目内的 Toy NFT 和 Toy Token；它没有连接、部署或交易真实资产的能力。
 
 ## 安全边界
 
@@ -16,6 +17,7 @@
 - 配置中没有主网或测试网 RPC；
 - `.env` 被排除在 Git 之外，代码也不会读取私钥；
 - 每次运行测试都会创建一条新的临时链，运行结束后状态消失。
+- 声明式 Adapter 禁止网络、RPC、账户、地址、钱包、密钥和任意脚本字段。
 
 不要把 `contracts/common/ToyAssets.sol` 中的简化资产合约用于生产环境。
 
@@ -72,7 +74,7 @@ Skill 指导 Agent 检查源码并建立语义绑定
 
 Agent 负责理解自然语言、检查源码、拆分复合规则、记录假设并选择是否存在语义匹配的动态适配器。命令行程序不会自行理解任意自然语言，也不会自动修改合约；它只校验统一 IR、分析 Solidity AST、生成已审核测试并汇总证据。
 
-### 当前三个基准不变量
+### 第一阶段的三个开发基准
 
 | 基准案例 | 不变量类别 | 动态适配器 | 本地参数 |
 |---|---|---|---|
@@ -80,9 +82,39 @@ Agent 负责理解自然语言、检查源码、拆分复合规则、记录假�
 | OMNI | solvency | `collateral-coverage` | 3 个有界借款值 |
 | Revest | conservation | `funded-value` | 3 组数量/存款组合 |
 
-这三个案例是第一阶段的已审核基准，不是通用漏洞库。静态分析器可以发现其他 callback/shared-state 候选；但新规则没有已审核适配器时，只能得到静态覆盖证据，不能声称已经动态证明可利用。
+这三个案例是第一阶段的开发基准，不是通用漏洞库。静态分析器可以发现其他 callback/shared-state 候选；但新规则没有已审核适配器时，只能得到静态覆盖证据，不能声称已经动态证明可利用。
 
-在当前教学代码上的验证结果是：静态分析列出 13 条未缓解候选路径，全部落在三个已声明规则的代码 scope 内；其中只有 3 条精确绑定路径具有本地动态反例，其余 10 条仍只是静态候选。三个适配器共运行 7 个漏洞参数场景和对应的 7 个修复回归场景。这里的“规则已覆盖”不等于“路径已证明可利用”。
+### 第二阶段：声明式 Adapter 与留出案例
+
+第二阶段把原来写在测试运行器中的三个案例分支拆成 `rules/adapters/*.json`。`test/support/callback-rule-runtime.ts` 现在是一个通用执行器，只解释以下受限操作：按名称部署本地合约、按顺序调用函数、读取观察值，以及执行 `eq` / `lte` / `gte` 与整数加减乘表达式。它不包含 HypeBears、OMNI、Revest 或 Marketplace 的名称和专用分支，也不执行 Adapter 提供的任意代码。
+
+Adapter 的权威格式在 `rules/adapters/adapter-spec.schema.json`，程序级跨字段校验在 `scripts/lib/adapter-spec.mjs`。每个 Adapter 必须声明：
+
+- `dataset`：`development` 或 `holdout`；
+- 精确静态路径和漏洞版/修复版合约；
+- 有上限的整数参数；
+- 本地部署、setup、entry、observations 和受限 assertion；
+- 所有合约引用必须指向前面已声明的本地部署。
+
+前三个 Adapter 标记为 `development`。新增的 `marketplace-bond` 标记为 `holdout`，用于回答“同一个执行器能否支持开发时未编码进核心运行器的新业务场景”。它只增加了教学合约、统一规则和 Adapter JSON，没有修改通用执行器，也没有增加案例专用分支。
+
+| 数据集 | 案例 | 不变量 | 参数组 | 动态场景 |
+|---|---|---|---:|---:|
+| development | HypeBears | 一次外层调用最多铸造 1 枚 Toy NFT | 1 | 2 |
+| development | OMNI | Toy debt 不超过剩余 Toy NFT 抵押能力 | 3 | 6 |
+| development | Revest | Toy Token 支出不超过调用者实际投入 | 3 | 6 |
+| holdout | Marketplace | 同一笔 Toy listing bond 最多返还一次 | 2 | 4 |
+
+当前完整验证结果：4 条规则生成 18 个本地动态场景，漏洞版均观察到预期的不变量破坏，修复版均保持不变量；静态分析列出 16 条未缓解审查候选，其中 4 条精确绑定路径已有本地动态反例，另外 12 条仍明确标记为仅静态证据，未声明候选为 0。完整测试共 53 项通过。这里的“规则已覆盖”不等于“路径已证明可利用”，留出案例通过也只是当前受限 DSL 的一次泛化证据，而不是对任意合约的通用保证。
+
+新增本地教学案例时，通常只需添加：
+
+1. 一组最小化的漏洞版/修复版 Toy 合约与 callback receiver；
+2. `rules/research-rule-spec.json` 中的一条语义绑定规则；
+3. `rules/adapters/` 中的一份声明式 Adapter；
+4. 少量、确定且有上下限的本地参数。
+
+如果新场景不能由现有受限操作表达，应先扩展 schema、校验器和通用执行器，并为新操作增加安全测试；不要在执行器中加入某个案例名称的条件分支。
 
 ### 执行完整工作流
 
@@ -119,7 +151,7 @@ pnpm visual:rules
 
 ### 第二版：共享状态防御分析器
 
-`pnpm analyze` 只读取本项目的 Solidity 编译 AST，不连接任何 RPC、钱包或真实资产。它会：
+`pnpm analyze` 只读取本项目的 Solidity 编译 AST，不连接任何 RPC、钱包或真实资产。它会合并 Hardhat 的增量编译批次并按源码/合约去重，然后：
 
 1. 定位 ERC-721 / ERC-1155 的安全转移、铸造和接收回调点；
 2. 计算外层函数与其他公开函数共同读写的状态；
@@ -185,6 +217,12 @@ pnpm node
 
 修复版在回调以前预留 ID。外层使用 ID 2，回调路径使用 ID 3；教学账户最终仍为 1，金库仍为 100。
 
+### Marketplace holdout
+
+漏洞版：seller-receiver 使用一笔 Toy Token bond 挂出自己的 Toy NFT，然后买回它。NFT 接收回调在 listing 仍处于 active 时进入 `refundListing`，回调返回后 `buy` 再次返还同一笔 bond，因此最终余额超过实际投入。
+
+修复版：`buy` 在发送 Toy NFT 之前关闭 listing 并返还一次 bond。接收回调中的退款尝试失败，最终余额不超过投入。这个案例完全在本地构造，不对应真实 marketplace、真实订单或真实财产交易。
+
 ## 项目结构
 
 ```text
@@ -195,9 +233,16 @@ pnpm node
 contracts/
 ├── common/ToyAssets.sol
 ├── hypebears/HypeBearsLab.sol
+├── marketplace/MarketplaceLab.sol
 ├── omni/OmniLab.sol
 └── revest/RevestLab.sol
 rules/
+├── adapters/
+│   ├── adapter-spec.schema.json
+│   ├── collateral-coverage.json
+│   ├── funded-value.json
+│   ├── marketplace-bond.json
+│   └── one-time-mint.json
 ├── research-brief.txt
 ├── research-rule-spec.json
 └── research-rule-spec.schema.json
@@ -206,14 +251,18 @@ scripts/
 ├── analyze-shared-state.mjs
 ├── audit-rule-coverage.mjs
 ├── generate-callback-tests.mjs
-└── lib/research-rule-spec.mjs
+└── lib/
+    ├── adapter-spec.mjs
+    └── research-rule-spec.mjs
 test/
+├── adapter-spec.test.mjs
 ├── reentrancy-lab.ts
-└── business-invariants.ts
+├── business-invariants.ts
+└── support/callback-rule-runtime.ts
 REPORT.md
 ```
 
-每个案例均包含：
+每个动态案例均包含：
 
 - 漏洞版协议；
 - 回调教学合约；
