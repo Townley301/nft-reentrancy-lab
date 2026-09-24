@@ -18,6 +18,7 @@ Turn researcher prose into one reviewable invariant specification and local evid
 7. Keep development and holdout rules distinct. Do not tune the generic executor against a holdout and then report that case as independent evidence. A supported holdout should require fixture, rule, and adapter data only; a DSL extension must be disclosed and tested separately.
 8. For benchmark evaluation, read `evaluation/ground-truth.json` and preserve its frozen-engine hashes, labeled positive/negative paths, and declared thresholds. Add known authorization, reachability, or state-index limitations as negative controls instead of hiding them.
 9. Run `pnpm audit:agent`, then review `analysis/rule-coverage-report.json`, `analysis/ground-truth-evaluation.json`, and their Markdown forms. Keep findings separated by evidence level and require researcher approval before modifying contracts.
+10. Finish with `pnpm verify:reproducibility`. Treat `evaluation/expected-summary.json` as a reviewer-controlled regression contract: investigate drift before changing it, and never update expected metrics automatically merely to make verification pass. CI must remain read-only and must not add secrets, public RPCs, wallets, deployments, or real-asset operations.
 
 ## Evidence labels
 

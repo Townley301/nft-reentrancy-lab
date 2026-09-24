@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22",
+    "pnpm": "12.4.1"
+  },
   "description": "Local-only educational simulations of NFT callback reentrancy patterns",
   "scripts": {
     "compile": "hardhat compile",
@@ -14,6 +18,8 @@
     "audit:coverage": "hardhat compile --force && node scripts/analyze-shared-state.mjs && node scripts/audit-rule-coverage.mjs",
     "evaluate:ground-truth": "node scripts/evaluate-ground-truth.mjs",
     "audit:agent": "pnpm verify:rules && pnpm audit:coverage && pnpm evaluate:ground-truth && pnpm visual:rules",
+    "verify:reproducibility": "node scripts/verify-reproducibility.mjs",
+    "verify:ci": "pnpm test && pnpm audit:agent && pnpm verify:reproducibility",
     "test:v2": "hardhat test nodejs",
     "verify:v2": "hardhat compile --force && node scripts/analyze-shared-state.mjs && hardhat test nodejs",
     "demo": "hardhat run scripts/run-all.ts",

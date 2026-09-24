@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "localOnly": true,
+  "business": {
+    "rules": 6,
+    "developmentRules": 3,
+    "holdoutRules": 3,
+    "scenarios": 26,
+    "passed": 26,
+    "failed": 0
+  },
+  "coverage": {
+    "declaredRules": 6,
+    "developmentRules": 3,
+    "holdoutRules": 3,
+    "staticCandidates": 23,
+    "coveredCandidates": 21,
+    "undeclaredCandidates": 2,
+    "locallyDemonstratedCandidates": 6,
+    "staticOnlyCandidates": 17,
+    "locallyDemonstratedUndeclared": 0
+  },
+  "groundTruth": {
+    "labeledPaths": 15,
+    "truePositive": 6,
+    "falsePositive": 2,
+    "falseNegative": 0,
+    "trueNegative": 7,
+    "precision": 0.75,
+    "recall": 1,
+    "specificity": 0.7777777777777778,
+    "dynamicChecks": 12,
+    "dynamicPassed": 12,
+    "dynamicPassRate": 1,
+    "baselineDriftFiles": 0,
+    "holdoutRules": 3,
+    "holdoutsWithoutExecutorChanges": 3
+  }
+}

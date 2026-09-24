@@ -55,6 +55,8 @@ Stage 3 freezes the adapter schema, validator, and generic runtime by commit and
 
 Stage 4 adds the authorization-category holdout without changing any frozen engine file. The vulnerable fixture keeps a one-use local authorization active during the ERC-721 callback; the fixed fixture consumes it before transferring the Toy NFT.
 
+Stage 5 adds a versioned reproducibility contract and a read-only continuous-integration workflow. A single command regenerates every local result and rejects unexpected metric drift, missing reports, failed ground-truth thresholds, or a weakened safety boundary. The CI job has read-only repository permission, does not persist Git credentials, does not read secrets, and contains no deployment or public-chain step.
+
 ## 4. What the Workflow Now Accomplishes
 
 The implemented workflow is:
@@ -77,7 +79,7 @@ Vulnerable/fixed comparison under the same bounded parameters
 Evidence correlation and JSON, Markdown, and offline HTML reports
 ```
 
-This workflow currently completes six useful tasks:
+This workflow currently completes seven useful tasks:
 
 1. It preserves the researcher's prose while creating an auditable semantic binding to exact local code identifiers.
 2. It separates a static review hypothesis from a locally demonstrated invariant violation, avoiding the claim that an AST pattern alone proves exploitability.
@@ -85,19 +87,20 @@ This workflow currently completes six useful tasks:
 4. It distinguishes development cases from holdouts, allowing limited measurement of whether the adapter DSL generalizes beyond the cases used to shape it.
 5. It enforces a local-only safety boundary: ephemeral Hardhat state, project-defined Toy assets, bounded parameters, and no public RPC, wallet, private key, live address, or real-asset operation.
 6. It evaluates a frozen engine against hand-labeled positive and negative paths and records whether holdouts required an executor change.
+7. It compares all generated summary metrics with a reviewer-controlled expected file so that accidental result drift cannot pass silently.
 
 The workflow does not yet automatically understand arbitrary prose, synthesize a safe adapter for every contract, prove reachability, or establish production exploitability. Unsupported rules remain static-only until a reviewer supplies an appropriate local fixture and adapter.
 
 ## 5. Next Research Work
 
-The next stage should continue evaluating the frozen workflow rather than immediately add more executor features.
+Stage 5 completes the clean-install reproducibility step. The next stage should refine evaluation quality rather than immediately add more executor features.
 
 1. Preserve the frozen Stage 2 adapter schema, validator, and generic executor baseline.
-2. Add clean-install continuous integration that runs rule generation, all tests, coverage correlation, safety checks, ground-truth evaluation, and report generation from an empty build directory.
-3. Expand negative controls for modifiers, mapping-key aliasing, callback reachability, and mutually exclusive state conditions.
-4. Extend the hand-reviewed manifest until every intentionally evaluated callback path has an expected evidence level.
+2. Expand negative controls for modifiers, mapping-key aliasing, callback reachability, and mutually exclusive state conditions.
+3. Extend the hand-reviewed manifest until every intentionally evaluated callback path has an expected evidence level.
+4. Add explicit reason codes for static-only and intentionally rejected candidates.
 5. Continue measuring path coverage, false positives, false negatives, unsupported-adapter rate, and whether each holdout required a schema/runtime change.
-6. Document limitations and threats to validity, especially the small synthetic dataset, simplified Toy contracts, bounded parameter search, AST aliasing limits, and the difference between local evidence and real-protocol security conclusions.
+6. Write the final threats-to-validity section, especially the small synthetic dataset, simplified Toy contracts, bounded parameter search, AST aliasing limits, and the difference between local evidence and real-protocol security conclusions.
 
 If a holdout requires a new DSL operation, that operation should first be isolated, schema-validated, negatively tested, and reported as a workflow extension. The same case should not then be counted as untouched holdout evidence.
 
@@ -110,7 +113,7 @@ The project would be reasonably complete as a reproducible defensive research pr
 - the generic executor contains no case or contract names, and most holdouts run without executor changes;
 - safe negative controls are included and the report presents false positives and false negatives rather than only successful detections;
 - every static candidate is classified as locally demonstrated, static-only, or intentionally rejected with a recorded reason;
-- a clean checkout reproduces the same tests and summary metrics with one documented command;
+- a clean checkout reproduces the same tests and summary metrics with the documented `pnpm verify:ci` command (implemented in Stage 5);
 - schemas, safety rejection tests, development/holdout provenance, and generated-report formats are versioned;
 - the report clearly limits conclusions to local Toy contracts and never generalizes the results to real assets or production exploitability.
 
@@ -118,13 +121,11 @@ Meeting these criteria would make the work a credible teaching and research prot
 
 ## 7. Minimal Reproduction
 
-Requirements: Node.js 22+ and pnpm 10+.
+Requirements: Node.js 22+ and pnpm 12.4.1.
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm test
-pnpm verify:v2
-pnpm audit:agent
+pnpm verify:ci
 ```
 
 Run the direct demonstration of the three original historical teaching cases with:
@@ -144,10 +145,11 @@ The current verified result is:
 - 15 hand-labeled evaluation paths: 6 true positives, 2 false positives, 0 false negatives, and 7 true negatives;
 - 75% precision, 100% recall, and 77.8% specificity on the labeled paths;
 - 12/12 dynamic ground-truth checks passed, 3/3 holdouts required no executor change, and frozen-engine drift is zero;
-- 64 passing tests in the complete suite.
+- 66 passing tests in the complete suite, including reproducibility drift and safety-boundary rejection tests;
+- the generated JSON and offline HTML reports match `evaluation/expected-summary.json`.
 
 ## 8. Conclusion
 
 All six dynamic cases share the same underlying cause: critical business state remains incomplete or stale when control is transferred to an external NFT receiver callback. A robust fix generally combines the Checks-Effects-Interactions pattern, a cross-function reentrancy guard, and explicit business-invariant tests.
 
-The immediate next step is Stage 5: keep the engine frozen and add clean-checkout CI plus reproducibility checks before the final research summary.
+The immediate next step is Stage 6: improve negative-control classification and document threats to validity, while keeping the frozen engine and Stage 5 reproducibility contract unchanged.

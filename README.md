@@ -26,20 +26,13 @@
 ## 环境要求
 
 - Node.js 22 或更高版本；
-- pnpm 10 或兼容的 npm。
+- pnpm 12.4.1（由 `package.json` 声明并由 CI 固定安装）。
 
 ## 安装和运行
 
 ```bash
-pnpm install
-pnpm test
-pnpm demo
-pnpm visual
-pnpm analyze
-pnpm verify:v2
-pnpm verify:rules
-pnpm audit:agent
-pnpm evaluate:ground-truth
+pnpm install --frozen-lockfile
+pnpm verify:ci
 ```
 
 ## 第一阶段：统一的不变量驱动审计流程
@@ -125,7 +118,7 @@ Adapter 的权威格式在 `rules/adapters/adapter-spec.schema.json`，程序级
 
 第四阶段加入 `temporary-authorization` holdout：本地 vault 给 receiver 一次临时资格，漏洞版在 ERC-721 callback 后才撤销，因此 callback 可以领取第二枚 Toy NFT；修复版在 callback 前消耗资格。该案例只新增 Toy fixture、统一规则和 Adapter JSON，没有修改冻结的 schema、校验器或通用执行器。
 
-当前完整验证结果：6 条规则生成 26 个本地动态场景；静态分析列出 23 条未缓解审查候选，其中 6 条精确绑定路径已有本地动态反例，17 条仍明确标记为仅静态证据。15 条 ground-truth 路径包含 6 个 true positives、2 个 false positives、0 个 false negatives 和 7 个 true negatives；precision 为 75%，recall 为 100%，specificity 为 77.8%。12/12 个动态 ground-truth 检查通过，3/3 个 holdout 均未修改冻结执行器，baseline 漂移为 0。2 条规则外候选仍来自刻意保留的权限负样本。完整测试共 64 项通过。
+当前完整验证结果：6 条规则生成 26 个本地动态场景；静态分析列出 23 条未缓解审查候选，其中 6 条精确绑定路径已有本地动态反例，17 条仍明确标记为仅静态证据。15 条 ground-truth 路径包含 6 个 true positives、2 个 false positives、0 个 false negatives 和 7 个 true negatives；precision 为 75%，recall 为 100%，specificity 为 77.8%。12/12 个动态 ground-truth 检查通过，3/3 个 holdout 均未修改冻结执行器，baseline 漂移为 0。2 条规则外候选仍来自刻意保留的权限负样本。Stage 5 加入两个复现验证测试后，完整测试共 66 项通过。
 
 这里的“规则已覆盖”不等于“路径已证明可利用”，holdout 通过也只是当前受限 DSL 的局部泛化证据。
 
@@ -138,22 +131,41 @@ Adapter 的权威格式在 `rules/adapters/adapter-spec.schema.json`，程序级
 
 如果新场景不能由现有受限操作表达，应先扩展 schema、校验器和通用执行器，并为新操作增加安全测试；不要在执行器中加入某个案例名称的条件分支。
 
+### 第五阶段：干净环境复现与只读 CI
+
+第五阶段没有新增攻击能力或真实交易功能，而是把前四个阶段的结果固定成可检查的复现契约：
+
+- `evaluation/expected-summary.json` 版本化保存预期规则数、场景数、静态候选数、ground-truth 指标和冻结基线状态；
+- `scripts/verify-reproducibility.mjs` 将新生成的 JSON/HTML 报告与该契约逐项比较，并再次要求 `rpcCalls`、`privateKeys`、`realAssets` 和 `arbitraryAdapterCode` 保持关闭；
+- `.github/workflows/local-toy-ci.yml` 从干净源码安装锁定依赖，只授予仓库内容读取权限，不持久化 Git 凭据，不读取 secrets，也没有部署、发布或网络链交互步骤；
+- CI 最后检查受版本控制的源码没有被生成器意外改写。
+
+统一复现命令是：
+
+```bash
+pnpm verify:ci
+```
+
+它依次运行完整测试、规则生成、临时 Hardhat 链上的 Toy 场景、静态覆盖分析、ground-truth 评估、离线报告生成和摘要漂移检查。验证成功时，最后一行应报告 6 条规则、26 个本地场景、23 条静态候选和 15 条标注路径。若研究者有意修改数据集或标注，应先人工审查新的结果，再显式更新 `evaluation/expected-summary.json`；不应为了让 CI 通过而自动接受漂移。
+
 ### 执行完整工作流
 
 先由研究者编辑 `rules/research-brief.txt`，再用 `$nft-callback-auditor` 让 Agent 检查代码并更新统一 IR。确认绑定后运行：
 
 ```bash
-pnpm audit:agent
+pnpm verify:ci
 ```
 
 该命令依次：
 
-1. 校验统一规则并生成 `test/generated/callback-rules.test.ts`；
-2. 在 Hardhat 临时内存链上运行漏洞版和修复版场景；
-3. 编译 Solidity 并执行 callback/shared-state 静态分析；
-4. 将声明规则与静态候选关联；
-5. 对人工标注路径计算误报、漏报、动态结果和 baseline 漂移；
-6. 生成机器可读、Markdown 和离线 HTML 报告。
+1. 运行完整单元测试和本地 Toy 合约测试；
+2. 校验统一规则并生成 `test/generated/callback-rules.test.ts`；
+3. 在 Hardhat 临时内存链上运行漏洞版和修复版场景；
+4. 编译 Solidity 并执行 callback/shared-state 静态分析；
+5. 将声明规则与静态候选关联；
+6. 对人工标注路径计算误报、漏报、动态结果和 baseline 漂移；
+7. 生成机器可读、Markdown 和离线 HTML 报告；
+8. 将生成摘要与版本化预期结果比较，并重新检查本地安全边界。
 
 主要输出为：
 
@@ -262,6 +274,7 @@ pnpm node
 ## 项目结构
 
 ```text
+.github/workflows/local-toy-ci.yml
 .agents/skills/nft-callback-auditor/
 ├── SKILL.md
 ├── agents/openai.yaml
@@ -293,17 +306,20 @@ scripts/
 ├── audit-rule-coverage.mjs
 ├── generate-callback-tests.mjs
 ├── evaluate-ground-truth.mjs
+├── verify-reproducibility.mjs
 └── lib/
     ├── adapter-spec.mjs
     └── research-rule-spec.mjs
 test/
 ├── adapter-spec.test.mjs
 ├── ground-truth-evaluator.test.mjs
+├── reproducibility-verifier.test.mjs
 ├── reentrancy-lab.ts
 ├── business-invariants.ts
 └── support/callback-rule-runtime.ts
 REPORT.md
 evaluation/
+├── expected-summary.json
 ├── ground-truth.json
 └── ground-truth.schema.json
 ```

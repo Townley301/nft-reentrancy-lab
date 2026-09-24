@@ -43,6 +43,8 @@ Treat holdout labels as research provenance. If executor behavior or the DSL is 
 
 For benchmark work, `evaluation/ground-truth.json` is the hand-reviewed evaluation source. It records frozen engine hashes, exact positive and negative paths, expected local outcomes, and acceptance thresholds. Do not alter labels merely to improve measured precision or recall; document analyzer limitations through negative controls.
 
+`evaluation/expected-summary.json` is the separate reproducibility contract for aggregate results. After generating reports, run `pnpm verify:reproducibility`. If it reports drift, review the rule, adapter, analyzer, and ground-truth changes before editing the expected summary. A generated result must never overwrite the expected file automatically.
+
 ## Coverage interpretation
 
 The deterministic coverage analyzer matches declared scopes against AST callback candidates and obtains adapter-to-path mappings from the same specification. A match means the declared rule touches the same contract/function/state area; it does not prove the rule itself is complete.
